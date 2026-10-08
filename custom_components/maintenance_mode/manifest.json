@@ -1,7 +1,7 @@
 {
   "domain": "maintenance_mode",
   "name": "Mode maintenance",
-  "codeowners": ["@VOTRE_PSEUDO"],
+  "codeowners": ["Nono01360"],
   "config_flow": true,
   "dependencies": ["http", "frontend", "panel_custom", "websocket_api", "automation"],
   "documentation": "https://github.com/VOTRE_PSEUDO/ha-maintenance-mode",
@@ -10,5 +10,5 @@
   "issue_tracker": "https://github.com/VOTRE_PSEUDO/ha-maintenance-mode/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.3.0"
+  "version": "0.3.1"
 }
