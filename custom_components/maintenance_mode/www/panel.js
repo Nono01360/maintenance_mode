@@ -553,7 +553,7 @@ class MaintenanceModePanel extends HTMLElement {
       const payload = { ...base, start: iso(f.start), end, pause_automations: f.pause };
       ok = f.mode === "add"
         ? await this._call("add_window", payload)
-        : await this._call("update_window", { id: f.id, ...payload });
+        : await this._call("update_window", { window_id: f.id, ...payload });
     } else if (f.mode === "now") {
       ok = await this._call("start", { ...base, end, pause_automations: f.pause });
     } else {
@@ -591,7 +591,7 @@ class MaintenanceModePanel extends HTMLElement {
         this._confirm = null; await this._call("stop"); return;
       case "delete":
         if (this._confirm !== t.dataset.id) { this._confirm = t.dataset.id; this._render(true); return; }
-        this._confirm = null; await this._call("delete_window", { id: t.dataset.id }); return;
+        this._confirm = null; await this._call("delete_window", { window_id: t.dataset.id }); return;
       case "toggle-auto":
         this._toggle(this._draft.automations, t.dataset.entity); this._draftDirty = true; this._render(true); return;
       case "auto-none":

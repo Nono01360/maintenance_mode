@@ -140,14 +140,14 @@ async def ws_add_window(hass, connection, msg, manager) -> dict[str, Any]:
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "maintenance_mode/update_window",
-        vol.Required("id"): cv.string,
+        vol.Required("window_id"): cv.string,
         **_WINDOW_FIELDS,
     }
 )
 @_command(admin=True)
 async def ws_update_window(hass, connection, msg, manager) -> dict[str, Any]:
     await manager.async_update_window(
-        msg["id"],
+        msg["window_id"],
         start=msg["start"],
         end=msg.get("end"),
         reason=msg["reason"],
@@ -158,11 +158,14 @@ async def ws_update_window(hass, connection, msg, manager) -> dict[str, Any]:
 
 
 @websocket_api.websocket_command(
-    {vol.Required("type"): "maintenance_mode/delete_window", vol.Required("id"): cv.string}
+    {
+        vol.Required("type"): "maintenance_mode/delete_window",
+        vol.Required("window_id"): cv.string,
+    }
 )
 @_command(admin=True)
 async def ws_delete_window(hass, connection, msg, manager) -> dict[str, Any]:
-    await manager.async_delete_window(msg["id"])
+    await manager.async_delete_window(msg["window_id"])
     return manager.state_for(connection.user)
 
 
