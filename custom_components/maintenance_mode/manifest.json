@@ -1,0 +1,14 @@
+{
+  "domain": "maintenance_mode",
+  "name": "Mode maintenance",
+  "codeowners": ["@VOTRE_PSEUDO"],
+  "config_flow": true,
+  "dependencies": ["http", "frontend", "panel_custom", "websocket_api", "automation"],
+  "documentation": "https://github.com/VOTRE_PSEUDO/ha-maintenance-mode",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/VOTRE_PSEUDO/ha-maintenance-mode/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.3.0"
+}
