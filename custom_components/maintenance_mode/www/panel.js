@@ -231,7 +231,12 @@ class MaintenanceModePanel extends HTMLElement {
     if (first) this._init();
   }
   get hass() { return this._hass; }
-  set narrow(v) { this._narrow = !!v; if (this._data || this._fatal) this._render(true); }
+  set narrow(v) {
+    v = !!v;
+    if (v === this._narrow) return;  // HA réaffecte la propriété à chaque mise à jour
+    this._narrow = v;
+    if (this._data || this._fatal) this._render(true);
+  }
   set panel(_v) {}
   set route(_v) {}
 
@@ -366,14 +371,22 @@ class MaintenanceModePanel extends HTMLElement {
     if (!force && this._isEditing()) { this._pending = true; return; }
     this._pending = false;
     const root = this.shadowRoot;
-    const top = root.querySelector(".scroll")?.scrollTop || 0;
+    // Positions de défilement : page (.scroll) puis listes internes (.list), dans l'ordre du DOM
+    const keep = this._resetScroll
+      ? []
+      : [...root.querySelectorAll(".scroll, .list")].map((e) => e.scrollTop);
+    this._resetScroll = false;
     root.innerHTML = `<style>${STYLES}</style>
       <div class="shell">
         ${this._barHtml()}
         <div class="scroll"><div class="wrap">${this._bodyHtml()}</div></div>
       </div>`;
-    const sc = root.querySelector(".scroll");
-    if (sc) sc.scrollTop = top;
+    const apply = () => {
+      const els = [...root.querySelectorAll(".scroll, .list")];
+      keep.forEach((v, i) => { if (els[i]) els[i].scrollTop = v; });
+    };
+    apply();
+    requestAnimationFrame(apply);  // 2e passe : le contenu des ha-card est rendu en différé
   }
 
   _barHtml() {
@@ -778,7 +791,8 @@ class MaintenanceModePanel extends HTMLElement {
         this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }));
         return;
       case "tab":
-        this._tab = t.dataset.tab; this._error = ""; this._form = null; this._render(true); return;
+        this._tab = t.dataset.tab; this._error = ""; this._form = null;
+        this._resetScroll = true; this._render(true); return;
       case "form-add": this._openForm("add"); return;
       case "form-now": this._openForm("now"); return;
       case "form-current": this._openForm("current", this._data.current); return;
