@@ -192,8 +192,8 @@ def _notification_text(hass: HomeAssistant, kind: str, w: Window) -> tuple[str, 
     if kind == "started":
         end = _fmt_local(w.end) if w.end else None
         if en:
-            return "Maintenance started", (f"Expected end: {end}." if end else "No end time set.") + reason
-        return "Maintenance en cours", (f"Fin prévue à {end}." if end else "Pas d'heure de fin définie.") + reason
+            return "Maintenance started", (f"Expected end: {end}." if end else "Home Assistant will be available as soon as possible.") + reason
+        return "Maintenance en cours", (f"Fin prévue à {end}." if end else "Home Assistant sera disponible dès que possible.") + reason
     if kind == "end_soon":
         end = _fmt_local(w.end) if w.end else "?"
         if en:

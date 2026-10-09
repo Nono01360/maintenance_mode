@@ -10,5 +10,5 @@
   "issue_tracker": "https://github.com/VOTRE_PSEUDO/ha-maintenance-mode/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.4.1"
+  "version": "0.4.2"
 }
