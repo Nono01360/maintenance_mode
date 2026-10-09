@@ -233,7 +233,7 @@ class MaintenanceModePanel extends HTMLElement {
   get hass() { return this._hass; }
   set narrow(v) {
     v = !!v;
-    if (v === this._narrow) return;  // HA réaffecte la propriété à chaque mise à jour
+    if (v === this._narrow) return;
     this._narrow = v;
     if (this._data || this._fatal) this._render(true);
   }
@@ -326,7 +326,7 @@ class MaintenanceModePanel extends HTMLElement {
     const panels = this._hass?.panels || {};
     for (const p of Object.values(panels)) {
       if (!p?.url_path) continue;
-      if (!p.title && p.url_path !== "lovelace") continue; // seulement ce qui est dans la barre latérale
+      if (!p.title && p.url_path !== "lovelace") continue;
       const label = p.title ? (this._hass.localize?.(`panel.${p.title}`) || p.title) : this._t("main_dashboard");
       out.set(p.url_path, label);
     }
@@ -371,22 +371,40 @@ class MaintenanceModePanel extends HTMLElement {
     if (!force && this._isEditing()) { this._pending = true; return; }
     this._pending = false;
     const root = this.shadowRoot;
-    // Positions de défilement : page (.scroll) puis listes internes (.list), dans l'ordre du DOM
+    const activeEl = root.activeElement;
+    const activeId = activeEl && activeEl.dataset?.action && !["scope", "apply-template"].includes(activeEl.dataset.action)
+      ? activeEl.dataset.action : null;
+    const activeField = activeEl ? activeEl.dataset?.field : null;
+    const hostScroll = this.scrollTop;
+    const parentScroll = this.parentElement ? this.parentElement.scrollTop : 0;
+    const windowScroll = window.scrollY;
     const keep = this._resetScroll
       ? []
       : [...root.querySelectorAll(".scroll, .list")].map((e) => e.scrollTop);
     this._resetScroll = false;
+
     root.innerHTML = `<style>${STYLES}</style>
       <div class="shell">
         ${this._barHtml()}
         <div class="scroll"><div class="wrap">${this._bodyHtml()}</div></div>
       </div>`;
+
     const apply = () => {
+      if (this.parentElement) this.parentElement.scrollTop = parentScroll;
+      this.scrollTop = hostScroll;
+      window.scrollTo(window.scrollX, windowScroll);
       const els = [...root.querySelectorAll(".scroll, .list")];
       keep.forEach((v, i) => { if (els[i]) els[i].scrollTop = v; });
+      if (activeId) {
+        const el = root.querySelector(`[data-action="${activeId}"]`);
+        if (el) el.focus();
+      } else if (activeField) {
+        const el = root.querySelector(`[data-field="${activeField}"]`);
+        if (el) el.focus();
+      }
     };
     apply();
-    requestAnimationFrame(apply);  // 2e passe : le contenu des ha-card est rendu en différé
+    requestAnimationFrame(apply);
   }
 
   _barHtml() {
@@ -441,9 +459,13 @@ class MaintenanceModePanel extends HTMLElement {
           ${admin && d.disabled_count ? `<div class="muted" style="margin-top:6px">${this._t("paused_n", { n: d.disabled_count })}</div>` : ""}
         </div></div>
         ${admin ? `<div class="actions">
-          <button class="btn" data-action="form-current">${this._t("edit")}</button>
-          <button class="btn danger" data-action="stop">${this._confirm === "stop" ? this._t("confirm_stop") : this._t("stop_now")}</button>
+          <button class="btn" data-action="edit-current">${this._t("edit")}</button>
+          <button class="btn danger" data-action="stop-current">${this._confirm === "stop" ? this._t("confirm_stop") : this._t("stop_now")}</button>
         </div>` : ""}</ha-card>`;
+
+      if (this._form && this._form.mode === "current") {
+        html += this._formHtml();
+      }
     } else {
       const next = d.upcoming[0];
       html += `<ha-card class="card"><div class="row">
@@ -451,31 +473,40 @@ class MaintenanceModePanel extends HTMLElement {
         <div class="grow"><h2>${this._t("none_running")}</h2>
           <div class="muted">${next ? this._t("next", { start: this._fmt(next.start), rel: this._rel(next.start) }) : this._t("none_planned")}</div>
         </div></div>
-        ${admin ? `<div class="actions"><button class="btn primary" data-action="form-now">${this._t("start_btn")}</button></div>` : ""}
+        ${admin ? `<div class="actions"><button class="btn primary" data-action="start-now">${this._t("start_btn")}</button></div>` : ""}
       </ha-card>`;
+
+      if (this._form && (this._form.mode === "now" || (this._form.mode === "add" && !this._form.id))) {
+        html += this._formHtml();
+      }
     }
 
-    if (this._form) html += this._formHtml();
-
     html += `<ha-card class="card"><div class="row"><div class="grow"><h2>${this._t("planned_title")}</h2></div>
-      ${admin && !this._form ? `<button class="btn primary sm" data-action="form-add">${this._t("plan_btn")}</button>` : ""}</div>`;
+      ${admin && (!this._form || this._form.id) ? `<button class="btn primary sm" data-action="open-add">${this._t("plan_btn")}</button>` : ""}</div>`;
     if (!d.upcoming.length) {
       html += `<div class="empty"><ha-icon icon="mdi:calendar-blank-outline"></ha-icon>${this._t("nothing")}</div>`;
     } else {
-      html += d.upcoming.map((w) => `<div class="item">
-        <div class="badge"><ha-icon icon="mdi:${w.repeat && w.repeat !== "none" ? "calendar-sync" : "calendar-clock"}"></ha-icon></div>
-        <div class="grow"><h3>${this._fmt(w.start)} <span class="muted">(${this._rel(w.start)})</span></h3>
-          <div class="muted">${esc(this._range(w))}</div>
-          ${w.reason ? `<div style="margin-top:4px">${esc(w.reason)}</div>` : ""}
-          ${this._chips(w)}
-          ${admin && !w.pause_automations ? `<div class="muted" style="margin-top:4px">${this._t("autos_kept")}</div>` : ""}
-        </div>
-        ${admin ? `<div class="col" style="gap:6px">
-          <button class="btn sm" data-action="form-edit" data-id="${esc(w.id)}">${this._t("edit")}</button>
-          <button class="btn sm" data-action="form-dup" data-id="${esc(w.id)}">${this._t("duplicate")}</button>
-          <button class="btn sm danger" data-action="delete" data-id="${esc(w.id)}">${this._confirm === w.id ? this._t("confirm_delete") : this._t("delete")}</button>
-        </div>` : ""}
-      </div>`).join("");
+      html += d.upcoming.map((w) => {
+        const isEditingThis = this._form && this._form.id === w.id && (this._form.mode === "edit" || this._form.mode === "add");
+        const deleteText = this._confirm === w.id ? this._t("confirm_delete") : this._t("delete");
+        return `<div class="item" style="flex-direction: column; gap: 0;">
+          <div class="row" style="width: 100%; padding: 12px 0;">
+            <div class="badge"><ha-icon icon="mdi:${w.repeat && w.repeat !== "none" ? "calendar-sync" : "calendar-clock"}"></ha-icon></div>
+            <div class="grow"><h3>${this._fmt(w.start)} <span class="muted">(${this._rel(w.start)})</span></h3>
+              <div class="muted">${esc(this._range(w))}</div>
+              ${w.reason ? `<div style="margin-top:4px">${esc(w.reason)}</div>` : ""}
+              ${this._chips(w)}
+              ${admin && !w.pause_automations ? `<div class="muted" style="margin-top:4px">${this._t("autos_kept")}</div>` : ""}
+            </div>
+            ${admin ? `<div class="col" style="gap:6px">
+              <button class="btn sm" data-action="edit-item" data-id="${esc(w.id)}">${this._t("edit")}</button>
+              <button class="btn sm" data-action="duplicate-item" data-id="${esc(w.id)}">${this._t("duplicate")}</button>
+              <button class="btn sm danger" data-action="delete-item" data-id="${esc(w.id)}">${deleteText}</button>
+            </div>` : ""}
+          </div>
+          ${isEditingThis ? `<div style="width: 100%; margin: 12px 0; border-left: 4px solid var(--primary-color); padding-left: 12px;">${this._formHtml()}</div>` : ""}
+        </div>`;
+      }).join("");
     }
     html += `</ha-card>`;
 
@@ -483,18 +514,21 @@ class MaintenanceModePanel extends HTMLElement {
     return html;
   }
 
-  _historyHtml() {
+_historyHtml() {
     const hist = this._data.history || [];
     const ended = { manual: "e_manual", auto: "e_auto", replaced: "e_replaced" };
     return `<ha-card class="card"><h2>${this._t("h_title")}</h2>
-      ${hist.length ? hist.map((h) => `<div class="item">
-        <div class="badge"><ha-icon icon="mdi:history"></ha-icon></div>
-        <div class="grow"><h3>${this._fmt(h.start)} → ${this._fmt(h.ended_at)}</h3>
-          <div class="muted">${this._t(ended[h.ended_by] || "e_auto")}${h.started_by ? " · " + this._t("h_by", { who: h.started_by }) : ""}</div>
-          ${h.reason ? `<div style="margin-top:4px">${esc(h.reason)}</div>` : ""}
-          ${this._chips(h)}
-        </div></div>`).join("")
-        : `<div class="empty"><ha-icon icon="mdi:history"></ha-icon>${this._t("h_empty")}</div>`}
+      ${hist.length ? hist.map((h) => {
+        const byText = h.started_by ? ` · ${this._t("h_by", { who: h.started_by })}` : "";
+        const endStatus = this._t(ended[h.ended_by] || "e_auto");
+        return `<div class="item">
+          <div class="badge"><ha-icon icon="mdi:history"></ha-icon></div>
+          <div class="grow"><h3>${this._fmt(h.start)} →${this._fmt(h.ended_at)}</h3>
+            <div class="muted">${endStatus}${byText}</div>${h.reason ? `<div style="margin-top:4px">${esc(h.reason)}</div>` : ""}
+            ${this._chips(h)}
+          </div></div>`;
+      }).join("")
+      : `<div class="empty"><ha-icon icon="mdi:history"></ha-icon>${this._t("h_empty")}</div>`}
     </ha-card>`;
   }
 
@@ -522,7 +556,10 @@ class MaintenanceModePanel extends HTMLElement {
       ${extra.length ? `<div class="chips">${extra.map((p) => `<span class="chip">${esc(p)}<button data-action="remove-page" data-page="${esc(p)}" aria-label="${esc(this._t("remove"))}">×</button></span>`).join("")}</div>` : ""}
       <div class="muted">${this._t("page_hint")}</div>` : "";
 
-    return `<ha-card class="card"><div class="col">
+    const containerStart = f.id ? `<div class="col">` : `<ha-card class="card"><div class="col">`;
+    const containerEnd = f.id ? `</div>` : `</div></ha-card>`;
+
+    return `${containerStart}
       <h2>${this._t(titles[f.mode])}</h2>
       ${this._error ? `<div class="banner error">${esc(this._error)}</div>` : ""}
       ${showTpl && tpls.length ? `<label class="field">${this._t("tpl_apply")}
@@ -547,13 +584,13 @@ class MaintenanceModePanel extends HTMLElement {
       ${showPause ? `<label class="check"><input type="checkbox" data-action="form-pause" ${f.pause ? "checked" : ""}>
         <span>${this._t("pause_autos")}</span></label>` : ""}
       <div class="actions" style="margin-top:0">
-        <button class="btn primary" data-action="form-save">${this._t("save")}</button>
-        <button class="btn" data-action="form-cancel">${this._t("cancel")}</button>
+        <button class="btn primary" data-action="save-form">${this._t("save")}</button>
+        <button class="btn" data-action="cancel-form">${this._t("cancel")}</button>
       </div>
       ${showTpl ? `<div class="row">
         <input type="text" maxlength="40" placeholder="${esc(this._t("tpl_name_ph"))}" data-field="form.tplName" value="${esc(f.tplName)}">
         <button class="btn sm" data-action="save-template">${this._t("tpl_save")}</button></div>` : ""}
-    </div></ha-card>`;
+    ${containerEnd}`;
   }
 
   // ----- onglet « Paramètres » -----
@@ -581,7 +618,7 @@ class MaintenanceModePanel extends HTMLElement {
         <div class="list">
           ${autos.length ? autos.map((a) => `<label class="check" data-filter="${esc((a.name + " " + a.id).toLowerCase())}"
               ${f && !(a.name + " " + a.id).toLowerCase().includes(f) ? "hidden" : ""}>
-            <input type="checkbox" data-action="toggle-auto" data-entity="${esc(a.id)}" ${selected.has(a.id) ? "checked" : ""}>
+            <input type="checkbox" data-action="toggle-auto" data-id="${esc(a.id)}" ${selected.has(a.id) ? "checked" : ""}>
             <span class="grow">${esc(a.name)} <span class="muted">${esc(a.id)}</span></span></label>`).join("")
             : `<div class="empty">${this._t("no_autos")}</div>`}
         </div>
@@ -596,7 +633,7 @@ class MaintenanceModePanel extends HTMLElement {
             ? `<label class="check"><input type="checkbox" checked disabled>
                 <span class="grow">${esc(u.name)} <span class="muted">${this._t("owner_fixed")}</span></span></label>`
             : `<label class="check"><input type="checkbox" data-action="toggle-user" data-user="${esc(u.id)}" ${dr.allowed_users.includes(u.id) ? "checked" : ""}>
-                <span class="grow">${esc(u.name)} ${u.is_admin ? `<span class="muted">${this._t("admin_badge")}</span>` : ""}</span></label>`).join("")}
+                <span class="grow">${esc(u.name)}${u.is_admin ? `<span class="muted">${this._t("admin_badge")}</span>` : ""}</span></label>`).join("")}
         </div>
       </div></ha-card>
 
@@ -643,7 +680,7 @@ class MaintenanceModePanel extends HTMLElement {
           <div class="muted">${u.is_owner ? this._t("u_owner") : u.is_admin ? this._t("u_admin") : this._t("u_user")}</div></td>
         <td class="sel">${u.is_owner
           ? `<span class="muted">${this._t("fixed_admin")}</span>`
-          : `<select data-action="role" data-user="${esc(u.id)}">
+          : `<select data-action="set-user-role" data-user="${esc(u.id)}">
               <option value="" ${u.explicit ? "" : "selected"}>${this._t("default_for", { role: roleLabel(u.is_admin ? "admin" : "viewer") })}</option>
               ${["admin", "viewer", "none"].map((r) =>
                 `<option value="${r}" ${u.explicit && u.role === r ? "selected" : ""}>${roleLabel(r)}</option>`).join("")}
@@ -651,7 +688,7 @@ class MaintenanceModePanel extends HTMLElement {
     </div></ha-card>`;
   }
 
-  // ---------- évènements ----------
+  // ---------- événements ----------
   _onClick(e) {
     const t = e.target.closest("[data-action]");
     if (!t || t.matches("input, select, textarea")) return;
@@ -686,9 +723,6 @@ class MaintenanceModePanel extends HTMLElement {
   _markDirty() {
     if (this._draftDirty) return;
     this._draftDirty = true;
-    
-    // CORRECTION : On cible directement les boutons existants dans le DOM actuel
-    // pour changer leur état instantanément SANS relancer de rendu destructif.
     this.shadowRoot.querySelectorAll('[data-action="save-settings"], [data-action="reset-settings"]')
       .forEach((b) => { b.disabled = false; });
   }
@@ -711,7 +745,6 @@ class MaintenanceModePanel extends HTMLElement {
     return `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())}T${p(x.getHours())}:${p(x.getMinutes())}`;
   }
 
-  // mode : add | edit | now | current ; w : fenêtre source ; dup : copie (nouvelles dates)
   _openForm(mode, w, dup = false) {
     const start = this._defaultStart();
     let startV = w && !dup ? this._local(w.start) : this._local(start);
@@ -764,119 +797,164 @@ class MaintenanceModePanel extends HTMLElement {
     if (await this._call("update_config", { templates })) { f.tplName = ""; this._render(true); }
   }
 
+async _act(action, target) {
+    const keepConfirm = ["stop-current", "delete-item", "delete-template"];
+    if (!keepConfirm.includes(action)) this._confirm = null;
+
+    if (action === "tab") {
+      this._tab = target.dataset.tab; this._error = ""; this._form = null;
+      this._resetScroll = true; this._render(true);
+    } else if (action === "menu") {
+      this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }));
+    } else if (action === "start-now") {
+      this._openForm("now");
+    } else if (action === "open-add") {
+      this._openForm("add");
+    } else if (action === "edit-current") {
+      this._openForm("current", this._data.current);
+    } else if (action === "stop-current") {
+      if (this._confirm === "stop") {
+        this._call("stop");
+        this._confirm = null;
+      } else {
+        this._confirm = "stop";
+        this._render(true);
+      }
+    } else if (action === "edit-item") {
+      const item = this._data.upcoming.find((x) => x.id === target.dataset.id);
+      if (item) this._openForm("edit", item);
+    } else if (action === "duplicate-item") {
+      const item = this._data.upcoming.find((x) => x.id === target.dataset.id);
+      if (item) this._openForm("add", item, true);
+    } else if (action === "delete-item") {
+      const id = target.dataset.id;
+      if (this._confirm === id) {
+        // CORRECTION : "delete_window" avec "window_id"
+        this._call("delete_window", { window_id: id });
+        this._confirm = null;
+      } else {
+        this._confirm = id;
+        this._render(true);
+      }
+    } else if (action === "cancel-form") {
+      this._form = null;
+      this._error = "";
+      this._render(true);
+    } else if (action === "save-form") {
+      this._saveForm(); // Appel à la fonction renommée ci-dessous
+    } else if (action === "apply-template") {
+      this._applyTemplate(target.value);
+    } else if (action === "save-template") {
+      this._saveTemplate();
+    } else if (action === "scope") {
+      this._form.scope = target.value;
+      this._render(true);
+    } else if (action === "toggle-page") {
+      this._toggle(this._form.pages, target.dataset.page);
+    } else if (action === "add-custom-page") {
+      const p = this._form.custom.trim().replace(/^\/+|\/+$/g, "");
+      if (p && !this._form.pages.includes(p)) {
+        this._form.pages.push(p);
+        this._form.custom = "";
+        this._render(true);
+      }
+    } else if (action === "remove-page") {
+      this._toggle(this._form.pages, target.dataset.page);
+      this._render(true);
+    } else if (action === "form-repeat") {
+      this._form.repeat = target.value;
+    } else if (action === "form-pause") {
+      this._form.pause = target.checked;
+    } else if (action === "toggle-auto") {
+      this._toggle(this._draft.automations, target.dataset.id);
+      this._markDirty();
+    } else if (action === "auto-none") {
+      this._draft.automations = [];
+      this._markDirty();
+      this._render(true);
+    } else if (action === "toggle-user") {
+      this._toggle(this._draft.allowed_users, target.dataset.user);
+      this._markDirty();
+    } else if (action === "toggle-notify") {
+      this._toggle(this._draft.notify_services, target.dataset.svc);
+      this._markDirty();
+    } else if (action === "toggle-kind") {
+      this._toggle(this._draft.notify_kinds, target.dataset.kind);
+      this._markDirty();
+    } else if (action === "save-settings") {
+      // CORRECTION : Attendre la réponse, puis forcer le rafraîchissement des données
+      const ok = await this._call("update_config", {
+        automations: this._draft.automations,
+        allowed_users: this._draft.allowed_users,
+        warn_minutes: Number(this._draft.warn_minutes) || 15,
+        end_soon_minutes: Number(this._draft.end_soon_minutes) || 10,
+        message: this._draft.message,
+        notify_services: this._draft.notify_services,
+        notify_kinds: this._draft.notify_kinds,
+      });
+      if (ok) {
+        this._draftDirty = false;
+        if (this._data?.config) this._onData(this._data);
+      }
+    } else if (action === "reset-settings") {
+      this._draftDirty = false;
+      this._onData(this._data);
+      this._render(true);
+    } else if (action === "delete-template") {
+      const id = target.dataset.id;
+      if (this._confirm === "tpl:" + id) {
+        const templates = (this._data.config?.templates || []).filter((x) => x.id !== id);
+        this._call("update_config", { templates });
+        this._confirm = null;
+      } else {
+        this._confirm = "tpl:" + id;
+        this._render(true);
+      }
+    } else if (action === "set-user-role") {
+      // CORRECTION : value="" est falsy, donc on supprime l'accès explicite pour revenir au défaut
+      const access = { ...(this._data.config?.panel_access || {}) };
+      if (target.value) {
+        access[target.dataset.user] = target.value;
+      } else {
+        delete access[target.dataset.user];
+      }
+      this._call("update_config", { panel_access: access });
+    }
+  }
+  // CORRECTION : Restauration de la fonction de sauvegarde d'origine avec les bons endpoints
   async _saveForm() {
     const f = this._form;
-    if (f.scope === "pages" && !f.pages.length) { this._error = this._t("err_pages"); this._render(true); return; }
+    if (f.scope === "pages" && !f.pages.length) {
+      this._error = this._t("err_pages");
+      this._render(true);
+      return;
+    }
     const iso = (v) => (v ? new Date(v).toISOString() : null);
     const base = { reason: f.reason.trim(), pages: f.scope === "pages" ? f.pages : [] };
     const end = iso(f.end);
     let ok;
+    
     if (f.mode === "add" || f.mode === "edit") {
-      if (!f.start) { this._error = this._t("err_start"); this._render(true); return; }
+      if (!f.start) {
+        this._error = this._t("err_start");
+        this._render(true);
+        return;
+      }
       const payload = { ...base, start: iso(f.start), end, pause_automations: f.pause, repeat: f.repeat };
+      // CORRECTION : add_window et update_window
       ok = f.mode === "add"
         ? await this._call("add_window", payload)
         : await this._call("update_window", { window_id: f.id, ...payload });
     } else if (f.mode === "now") {
+      // CORRECTION : endpoint "start" au lieu de "start_now"
       ok = await this._call("start", { ...base, end, pause_automations: f.pause });
     } else {
       ok = await this._call("update_current", { ...base, end });
     }
-    if (ok) { this._form = null; this._render(true); }
-  }
-
-  async _act(action, t) {
-    const keepConfirm = ["stop", "delete", "delete-template"];
-    if (!keepConfirm.includes(action)) this._confirm = null;
-    const f = this._form;
-    switch (action) {
-      case "menu":
-        this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }));
-        return;
-      case "tab":
-        this._tab = t.dataset.tab; this._error = ""; this._form = null;
-        this._resetScroll = true; this._render(true); return;
-      case "form-add": this._openForm("add"); return;
-      case "form-now": this._openForm("now"); return;
-      case "form-current": this._openForm("current", this._data.current); return;
-      case "form-edit": this._openForm("edit", this._data.upcoming.find((w) => w.id === t.dataset.id)); return;
-      case "form-dup": this._openForm("add", this._data.upcoming.find((w) => w.id === t.dataset.id), true); return;
-      case "form-cancel": this._form = null; this._error = ""; this._render(true); return;
-      case "form-save": await this._saveForm(); return;
-      case "form-pause": f.pause = t.checked; return;
-      case "form-repeat": f.repeat = t.value; return;
-      case "apply-template": this._applyTemplate(t.value); return;
-      case "save-template": await this._saveTemplate(); return;
-      case "scope": f.scope = t.value; this._render(true); return;
-      case "toggle-page": this._toggle(f.pages, t.dataset.page); return;
-      case "add-custom-page": {
-        const p = f.custom.trim().replace(/^\/+|\/+$/g, "");
-        if (p && !f.pages.includes(p)) f.pages.push(p);
-        f.custom = ""; this._render(true); return;
-      }
-      case "remove-page": f.pages = f.pages.filter((p) => p !== t.dataset.page); this._render(true); return;
-      case "stop":
-        if (this._confirm !== "stop") { this._confirm = "stop"; this._render(true); return; }
-        this._confirm = null; await this._call("stop"); return;
-      case "delete":
-        if (this._confirm !== t.dataset.id) { this._confirm = t.dataset.id; this._render(true); return; }
-        this._confirm = null; await this._call("delete_window", { window_id: t.dataset.id }); return;
-      case "delete-template": {
-        const key = "tpl:" + t.dataset.id;
-        if (this._confirm !== key) { this._confirm = key; this._render(true); return; }
-        this._confirm = null;
-        const templates = (this._data.config?.templates || []).filter((x) => x.id !== t.dataset.id);
-        await this._call("update_config", { templates });
-        return;
-      }
-      case "toggle-auto":
-        this._toggle(this._draft.automations, t.dataset.entity); 
-        this._markDirty(); // CORRECTION : Active le bouton en direct sans toucher au DOM
-        return;
-        
-      case "auto-none":
-        this._draft.automations = []; 
-        this._draftDirty = true; 
-        this._render(true); // Ici on garde le render(true) car "Tout désélectionner" doit vider visuellement toutes les cases d'un coup
-        return;
-        
-      case "toggle-user":
-        this._toggle(this._draft.allowed_users, t.dataset.user); 
-        this._markDirty(); // CORRECTION
-        return;
-        
-      case "toggle-notify":
-        this._toggle(this._draft.notify_services, t.dataset.svc); 
-        this._markDirty(); // CORRECTION
-        return;
-        
-      case "toggle-kind":
-        this._toggle(this._draft.notify_kinds, t.dataset.kind); 
-        this._markDirty(); // CORRECTION
-        return;
-
-      case "save-settings": {
-        const ok = await this._call("update_config", {
-          automations: this._draft.automations,
-          allowed_users: this._draft.allowed_users,
-          warn_minutes: Number(this._draft.warn_minutes) || 15,
-          end_soon_minutes: Number(this._draft.end_soon_minutes) || 10,
-          message: this._draft.message,
-          notify_services: this._draft.notify_services,
-          notify_kinds: this._draft.notify_kinds,
-        });
-        if (ok) { this._draftDirty = false; if (this._data?.config) this._onData(this._data); }
-        return;
-      }
-      case "reset-settings":
-        this._draftDirty = false; this._onData(this._data); this._render(true); return;
-      case "role": {
-        const access = { ...(this._data.config?.panel_access || {}) };
-        if (t.value) access[t.dataset.user] = t.value; else delete access[t.dataset.user];
-        await this._call("update_config", { panel_access: access });
-        return;
-      }
-      default:
+    
+    if (ok) {
+      this._form = null;
+      this._render(true);
     }
   }
 }
