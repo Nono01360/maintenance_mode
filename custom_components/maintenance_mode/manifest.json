@@ -1,7 +1,7 @@
 {
   "domain": "maintenance_mode",
   "name": "Mode maintenance",
-  "codeowners": ["@VOTRE_PSEUDO"],
+  "codeowners": ["@Nono01360"],
   "config_flow": true,
   "dependencies": ["http", "frontend", "panel_custom", "websocket_api", "automation"],
   "documentation": "https://github.com/Nono01360/maintenance_mode",
