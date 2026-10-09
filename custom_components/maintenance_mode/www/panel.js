@@ -686,6 +686,9 @@ class MaintenanceModePanel extends HTMLElement {
   _markDirty() {
     if (this._draftDirty) return;
     this._draftDirty = true;
+    
+    // CORRECTION : On cible directement les boutons existants dans le DOM actuel
+    // pour changer leur état instantanément SANS relancer de rendu destructif.
     this.shadowRoot.querySelectorAll('[data-action="save-settings"], [data-action="reset-settings"]')
       .forEach((b) => { b.disabled = false; });
   }
@@ -827,15 +830,31 @@ class MaintenanceModePanel extends HTMLElement {
         return;
       }
       case "toggle-auto":
-        this._toggle(this._draft.automations, t.dataset.entity); this._draftDirty = true; this._render(true); return;
+        this._toggle(this._draft.automations, t.dataset.entity); 
+        this._markDirty(); // CORRECTION : Active le bouton en direct sans toucher au DOM
+        return;
+        
       case "auto-none":
-        this._draft.automations = []; this._draftDirty = true; this._render(true); return;
+        this._draft.automations = []; 
+        this._draftDirty = true; 
+        this._render(true); // Ici on garde le render(true) car "Tout désélectionner" doit vider visuellement toutes les cases d'un coup
+        return;
+        
       case "toggle-user":
-        this._toggle(this._draft.allowed_users, t.dataset.user); this._draftDirty = true; this._render(true); return;
+        this._toggle(this._draft.allowed_users, t.dataset.user); 
+        this._markDirty(); // CORRECTION
+        return;
+        
       case "toggle-notify":
-        this._toggle(this._draft.notify_services, t.dataset.svc); this._draftDirty = true; this._render(true); return;
+        this._toggle(this._draft.notify_services, t.dataset.svc); 
+        this._markDirty(); // CORRECTION
+        return;
+        
       case "toggle-kind":
-        this._toggle(this._draft.notify_kinds, t.dataset.kind); this._draftDirty = true; this._render(true); return;
+        this._toggle(this._draft.notify_kinds, t.dataset.kind); 
+        this._markDirty(); // CORRECTION
+        return;
+
       case "save-settings": {
         const ok = await this._call("update_config", {
           automations: this._draft.automations,
