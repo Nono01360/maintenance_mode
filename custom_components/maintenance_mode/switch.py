@@ -24,7 +24,9 @@ class MaintenanceSwitch(MaintenanceEntity, SwitchEntity):
         return self.manager.current is not None
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        await self.manager.async_start_now(end=None, reason="", pages=[], pause=True)
+        await self.manager.async_start_now(
+            end=None, reason="", pages=[], pause=True, by="interrupteur"
+        )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self.manager.async_stop()
@@ -36,6 +38,7 @@ class MaintenanceSwitch(MaintenanceEntity, SwitchEntity):
             # Marqueur lu par le frontend : retrouve l'entité même renommée.
             "maintenance_mode_entity": True,
             "exempt_users": m.exempt_users,
+            "panel_hidden_for": m.hidden_panel_users,
             "message": m.config["message"],
             "warn_minutes": m.config["warn_minutes"],
             "current": m.current.as_dict() if m.current else None,

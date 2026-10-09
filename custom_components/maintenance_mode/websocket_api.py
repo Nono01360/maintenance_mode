@@ -6,22 +6,16 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.components import websocket_api
-from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 
-from .const import DOMAIN, ROLE_ADMIN, ROLES
+from .const import NOTIFY_KINDS, REPEATS, ROLE_ADMIN, ROLES
+from .manager import get_manager
 
 DATETIME = vol.Any(None, cv.datetime)
 PAGES = [cv.string]
-
-
-def _get_manager(hass: HomeAssistant):
-    for entry in hass.config_entries.async_entries(DOMAIN):
-        if entry.state is ConfigEntryState.LOADED:
-            return entry.runtime_data
-    return None
+# NB : le champ « id » est réservé au numéro de message websocket -> « window_id ».
 
 
 def _command(*, admin: bool):
@@ -29,14 +23,12 @@ def _command(*, admin: bool):
 
     def decorator(func):
         async def wrapper(hass, connection, msg):
-            manager = _get_manager(hass)
+            manager = get_manager(hass)
             if manager is None:
                 connection.send_error(msg["id"], "not_loaded", "Intégration non chargée.")
                 return
             if admin and manager.role_for(connection.user) != ROLE_ADMIN:
-                connection.send_error(
-                    msg["id"], websocket_api.ERR_UNAUTHORIZED, "Accès refusé."
-                )
+                connection.send_error(msg["id"], websocket_api.ERR_UNAUTHORIZED, "Accès refusé.")
                 return
             try:
                 result = await func(hass, connection, msg, manager)
@@ -86,6 +78,7 @@ async def ws_start(hass, connection, msg, manager) -> dict[str, Any]:
         reason=msg["reason"],
         pages=msg["pages"],
         pause=msg["pause_automations"],
+        by=connection.user.name or "",
     )
     return manager.state_for(connection.user)
 
@@ -119,6 +112,7 @@ _WINDOW_FIELDS = {
     vol.Optional("reason", default=""): cv.string,
     vol.Optional("pages", default=[]): PAGES,
     vol.Optional("pause_automations", default=True): cv.boolean,
+    vol.Optional("repeat", default="none"): vol.In(REPEATS),
 }
 
 
@@ -133,6 +127,7 @@ async def ws_add_window(hass, connection, msg, manager) -> dict[str, Any]:
         reason=msg["reason"],
         pages=msg["pages"],
         pause=msg["pause_automations"],
+        repeat=msg["repeat"],
     )
     return manager.state_for(connection.user)
 
@@ -153,6 +148,7 @@ async def ws_update_window(hass, connection, msg, manager) -> dict[str, Any]:
         reason=msg["reason"],
         pages=msg["pages"],
         pause=msg["pause_automations"],
+        repeat=msg["repeat"],
     )
     return manager.state_for(connection.user)
 
@@ -169,14 +165,31 @@ async def ws_delete_window(hass, connection, msg, manager) -> dict[str, Any]:
     return manager.state_for(connection.user)
 
 
+_TEMPLATE = vol.Schema(
+    {
+        vol.Optional("id"): cv.string,
+        vol.Required("name"): cv.string,
+        vol.Optional("reason", default=""): cv.string,
+        vol.Optional("pages", default=[]): PAGES,
+        vol.Optional("pause_automations", default=True): cv.boolean,
+        vol.Optional("duration"): vol.Any(None, vol.All(vol.Coerce(int), vol.Range(min=1, max=525600))),
+        vol.Optional("repeat", default="none"): vol.In(REPEATS),
+    }
+)
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "maintenance_mode/update_config",
         vol.Optional("automations"): [cv.string],
         vol.Optional("allowed_users"): [cv.string],
         vol.Optional("warn_minutes"): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
+        vol.Optional("end_soon_minutes"): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
         vol.Optional("message"): cv.string,
         vol.Optional("panel_access"): {cv.string: vol.In(ROLES)},
+        vol.Optional("notify_services"): [cv.string],
+        vol.Optional("notify_kinds"): [vol.In(NOTIFY_KINDS)],
+        vol.Optional("templates"): [_TEMPLATE],
     }
 )
 @_command(admin=True)

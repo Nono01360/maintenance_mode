@@ -1,0 +1,27 @@
+name: Release
+
+# Publie une release GitHub quand on pousse un tag (ex. v0.3.1).
+# HACS propose alors la mise à jour dans Home Assistant.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Vérifier que le tag correspond à la version du manifeste
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VERSION=$(python3 -c "import json;print(json.load(open('custom_components/maintenance_mode/manifest.json'))['version'])")
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "Le tag ($TAG) ne correspond pas à manifest.json ($VERSION)"; exit 1
+          fi
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true

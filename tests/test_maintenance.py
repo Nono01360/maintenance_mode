@@ -229,3 +229,45 @@ async def test_panel_registered_and_static(hass, hass_client):
     for path in ("overlay.js", "panel.js"):
         resp = await client.get(f"/maintenance_mode_static/{path}")
         assert resp.status == 200
+
+
+async def test_ws_update_and_delete_window(hass, hass_ws_client, hass_access_token):
+    """Régression : l'identifiant de maintenance ne doit pas s'appeler « id »
+    (champ réservé du message websocket, réécrit par le client JS)."""
+    _, m = await _setup(hass)
+    client = await hass_ws_client(hass, hass_access_token)
+    s = dt_util.utcnow() + timedelta(hours=1)
+    e = dt_util.utcnow() + timedelta(hours=2)
+    await client.send_json({"id": 1, "type": "maintenance_mode/add_window",
+                            "start": s.isoformat(), "end": e.isoformat(), "reason": "avant"})
+    res = await client.receive_json()
+    assert res["success"], res
+    wid = res["result"]["upcoming"][0]["id"]
+
+    await client.send_json({"id": 2, "type": "maintenance_mode/update_window", "window_id": wid,
+                            "start": (s + timedelta(hours=1)).isoformat(),
+                            "end": (e + timedelta(hours=1)).isoformat(),
+                            "reason": "après", "pages": ["map"], "pause_automations": False})
+    res = await client.receive_json()
+    assert res["success"], res
+    w = res["result"]["upcoming"][0]
+    assert w["id"] == wid and w["reason"] == "après" and w["pages"] == ["map"] and w["pause_automations"] is False
+
+    await client.send_json({"id": 3, "type": "maintenance_mode/delete_window", "window_id": wid})
+    res = await client.receive_json()
+    assert res["success"], res
+    assert res["result"]["upcoming"] == [] and m.schedule == []
+
+    await client.send_json({"id": 4, "type": "maintenance_mode/delete_window", "window_id": "inconnu"})
+    res = await client.receive_json()
+    assert not res["success"] and "introuvable" in res["error"]["message"]
+
+
+async def test_panel_hidden_attribute(hass, hass_admin_user, hass_owner_user):
+    _, m = await _setup(hass)
+    attrs = hass.states.get("switch.mode_maintenance").attributes
+    assert attrs["panel_hidden_for"] == []
+    await m.async_update_config({"panel_access": {hass_admin_user.id: "none", hass_owner_user.id: "none"}})
+    attrs = hass.states.get("switch.mode_maintenance").attributes
+    # le propriétaire garde toujours la vue administrateur
+    assert attrs["panel_hidden_for"] == [hass_admin_user.id]

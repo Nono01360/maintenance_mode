@@ -15,7 +15,7 @@ PANEL_JS = f"{STATIC_BASE}/panel.js"
 PANEL_URL_PATH = "maintenance"
 PANEL_ELEMENT = "maintenance-mode-panel"
 
-PLATFORMS = ["switch", "sensor"]
+PLATFORMS = ["switch", "sensor", "calendar"]
 
 # Droits sur le panneau
 ROLE_NONE = "none"      # ne voit rien
@@ -34,3 +34,19 @@ MAX_PAGES = 30
 LEGACY_AUTOMATIONS = "automations"
 LEGACY_ALLOWED_USERS = "allowed_users"
 LEGACY_WARN_MINUTES = "warn_minutes"
+
+# Répétition des maintenances planifiées
+REPEATS = ("none", "daily", "weekly", "monthly")
+MAX_OCCURRENCES = 200  # garde-fou pour l'affichage calendrier
+
+# Notifications push
+NOTIFY_KINDS = ("pre", "started", "end_soon", "ended")
+DEFAULT_END_SOON_MINUTES = 10
+
+# Historique / modèles
+MAX_HISTORY = 50
+MAX_TEMPLATES = 20
+
+# Évènements déclenchés sur le bus (utilisables comme déclencheurs d'automatisation)
+EVENT_STARTED = f"{DOMAIN}_started"
+EVENT_ENDED = f"{DOMAIN}_ended"

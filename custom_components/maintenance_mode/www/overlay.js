@@ -6,6 +6,7 @@
 
   const OVERLAY_ID = "maintenance-overlay";
   const TOAST_ID = "maintenance-toast";
+  const BANNER_ID = "maintenance-banner";
   const STYLE_ID = "maintenance-style";
   const DISMISS_KEY = "maintenance_mode_dismissed";
 
@@ -24,6 +25,9 @@
       starts: "Début :",
       pages: "Pages concernées :",
       close: "Fermer",
+      mainDashboard: "Tableau de bord principal",
+      active: "Mode maintenance actif",
+      open: "Ouvrir le panneau",
     },
     en: {
       title: "Maintenance in progress",
@@ -39,8 +43,47 @@
       starts: "Starts:",
       pages: "Affected pages:",
       close: "Close",
+      mainDashboard: "Main dashboard",
+      active: "Maintenance mode active",
+      open: "Open the panel",
     },
   };
+
+  // Noms lisibles des sous-pages (le reste vient de hass.panels)
+  const EXTRA_NAMES = {
+    fr: {
+      "config/devices": "Paramètres › Appareils",
+      "config/integrations": "Paramètres › Intégrations",
+      "config/entities": "Paramètres › Entités",
+      "config/areas": "Paramètres › Zones",
+      "config/automation": "Paramètres › Automatisations",
+      "config/script": "Paramètres › Scripts",
+      "config/scene": "Paramètres › Scènes",
+      "config/helpers": "Paramètres › Entrées",
+      "config/backup": "Paramètres › Sauvegardes",
+      "config/person": "Paramètres › Personnes",
+      "config/users": "Paramètres › Utilisateurs",
+      "config/voice-assistants": "Paramètres › Assistants vocaux",
+      "config/lovelace/dashboards": "Paramètres › Tableaux de bord",
+    },
+    en: {
+      "config/devices": "Settings › Devices",
+      "config/integrations": "Settings › Integrations",
+      "config/entities": "Settings › Entities",
+      "config/areas": "Settings › Areas",
+      "config/automation": "Settings › Automations",
+      "config/script": "Settings › Scripts",
+      "config/scene": "Settings › Scenes",
+      "config/helpers": "Settings › Helpers",
+      "config/backup": "Settings › Backups",
+      "config/person": "Settings › People",
+      "config/users": "Settings › Users",
+      "config/voice-assistants": "Settings › Voice assistants",
+      "config/lovelace/dashboards": "Settings › Dashboards",
+    },
+  };
+  const PANEL_PATH = "maintenance";
+  const SIDEBAR_STYLE_ID = "maintenance-sidebar-style";
 
   const CSS = `
     #${OVERLAY_ID} {
@@ -118,6 +161,22 @@
       color: var(--secondary-text-color); border-radius: 50%; display: flex;
     }
     #${TOAST_ID} .close:hover { background: var(--divider-color); }
+
+    #${BANNER_ID} {
+      position: fixed; z-index: 9999; right: 16px;
+      top: calc(var(--header-height, 56px) + 8px + env(safe-area-inset-top, 0px));
+      max-width: min(360px, calc(100vw - 32px));
+      font-family: var(--paper-font-body1_-_font-family, Roboto, sans-serif);
+      color: var(--primary-text-color);
+    }
+    #${BANNER_ID} ha-card {
+      display: flex; gap: 10px; align-items: center; padding: 8px 14px; font-size: 13px;
+      border: 1px solid color-mix(in srgb, var(--warning-color, #ff9800) 60%, transparent);
+      box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0,0,0,.2));
+    }
+    #${BANNER_ID}.clickable ha-card { cursor: pointer; }
+    #${BANNER_ID} .icon { color: var(--warning-color, #ff9800); display: flex; }
+    #${BANNER_ID} .sub { color: var(--secondary-text-color); font-size: 12px; }
 
     @keyframes maint-pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
@@ -202,6 +261,44 @@
       if (r && r.left >= 0 && r.width > 0 && r.width < 500) return Math.round(r.right);
     } catch (_) { /* ignore */ }
     return 0;
+  };
+
+  // Nom lisible d'un chemin de page ("config/devices" -> "Paramètres › Appareils")
+  const pageLabel = (path, hass, lang, tx) => {
+    const code = lang.split("-")[0];
+    const extra = (EXTRA_NAMES[code] || EXTRA_NAMES.en)[path];
+    if (extra) return extra;
+    const seg = path.split("/")[0];
+    const panel = hass.panels?.[seg];
+    let name = null;
+    if (panel?.title) name = hass.localize?.(`panel.${panel.title}`) || panel.title;
+    else if (seg === "lovelace") name = tx.mainDashboard;
+    if (!name) return path;
+    if (path === seg) return name;
+    const rest = path.slice(seg.length + 1).replace(/[-_/]+/g, " ");
+    return `${name} › ${rest.charAt(0).toUpperCase()}${rest.slice(1)}`;
+  };
+
+  // Masque l'entrée « Maintenance » de la barre latérale (best-effort : dépend
+  // de la structure interne du frontend). La feuille de style injectée dans le
+  // shadow DOM de la barre survit à ses re-rendus ; elle est reposée au tick suivant
+  // si la barre est recréée.
+  const setPanelHidden = (hide) => {
+    try {
+      const main = getHaEl()?.shadowRoot?.querySelector("home-assistant-main");
+      const sb =
+        main?.shadowRoot?.querySelector("ha-drawer ha-sidebar") ||
+        main?.shadowRoot?.querySelector("ha-sidebar");
+      const root = sb?.shadowRoot;
+      if (!root) return;
+      const existing = root.querySelector(`#${SIDEBAR_STYLE_ID}`);
+      if (hide && !existing) {
+        root.appendChild(el("style", { id: SIDEBAR_STYLE_ID },
+          `[data-panel="${PANEL_PATH}"], [href="/${PANEL_PATH}"] { display: none !important; }`));
+      } else if (!hide && existing) {
+        existing.remove();
+      }
+    } catch (_) { /* ignore */ }
   };
 
   // ---------- recherche de l'entité (même renommée) ----------
@@ -338,7 +435,8 @@
     r.when.textContent = `${tx.starts} ${rel(w.start - now, lang)} (${fmt(w.start, lang)})`;
     setLine(r.end, w.end ? `${tx.expectedEnd} ${fmt(w.end, lang)}` : "");
     setLine(r.reason, w.reason ? `${tx.reason} ${w.reason}` : "");
-    setLine(r.pages, w.pages?.length ? `${tx.pages} ${w.pages.join(", ")}` : "");
+    setLine(r.pages, w.pages?.length
+      ? `${tx.pages} ${w.pages.map((p) => pageLabel(p, hass, lang, tx)).join(", ")}` : "");
   };
 
   const removeToast = () => {
@@ -346,12 +444,56 @@
     toast = null;
   };
 
+  // ---------- bandeau « maintenance active » pour les utilisateurs NON bloqués ----------
+  let banner = null;
+
+  const buildBanner = () => {
+    ensureStyle();
+    const r = {};
+    r.title = el("div", { class: "title" });
+    r.sub = el("div", { class: "sub" });
+    const root = el("div", { id: BANNER_ID },
+      el("ha-card", {},
+        el("div", { class: "icon" }, icon("mdi:wrench-clock")),
+        el("div", {}, r.title, r.sub)));
+    document.body.appendChild(root);
+    return { root, r };
+  };
+
+  const renderBanner = (cur, hass, now, canOpen) => {
+    const { lang, tx } = i18n(hass);
+    if (!banner) {
+      banner = buildBanner();
+      banner.root.addEventListener("click", () => {
+        if (!banner?.root.classList.contains("clickable")) return;
+        history.pushState(null, "", `/${PANEL_PATH}`);
+        window.dispatchEvent(new CustomEvent("location-changed"));
+      });
+    }
+    banner.root.classList.toggle("clickable", canOpen);
+    banner.r.title.textContent = tx.active;
+    const bits = [];
+    if (cur.end) bits.push(`${tx.expectedEnd} ${fmt(cur.end, lang)} · ${rel(Math.max(0, cur.end - now), lang)}`);
+    if (canOpen) bits.push(tx.open);
+    banner.r.sub.textContent = bits.join(" — ");
+    banner.r.sub.style.display = bits.length ? "" : "none";
+  };
+
+  const removeBanner = () => {
+    banner?.root.remove();
+    banner = null;
+  };
+
   // ---------- boucle principale ----------
   const check = () => {
     const hass = getHass();
     if (!hass?.user) return;
     const st = findState(hass);
-    if (!st) { removeOverlay(); removeToast(); return; }
+    if (!st) { setPanelHidden(false); removeOverlay(); removeToast(); removeBanner(); return; }
+
+    // Utilisateur sans accès au panneau : on retire son entrée du menu latéral.
+    const panelHidden = !hass.user.is_owner && (st.attributes.panel_hidden_for || []).includes(hass.user.id);
+    setPanelHidden(panelHidden);
 
     const now = new Date();
     const cur = parseWin(st.attributes.current);
@@ -359,11 +501,19 @@
 
     if (st.state === "on" && cur && !exempt && pageBlocked(cur.pages)) {
       removeToast();
+      removeBanner();
       renderOverlay(st, cur, hass, now);
     } else {
       removeOverlay();
-      if (st.state === "on") removeToast();
-      else renderToast(st, hass, now);
+      if (st.state === "on") {
+        removeToast();
+        // Non bloqué alors que la maintenance les concernerait : on le rappelle discrètement
+        if (cur && exempt && pageBlocked(cur.pages)) renderBanner(cur, hass, now, !panelHidden);
+        else removeBanner();
+      } else {
+        removeBanner();
+        renderToast(st, hass, now);
+      }
     }
   };
 

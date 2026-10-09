@@ -41,22 +41,60 @@ administrateur et les autres la vue utilisateur. Le propriétaire a toujours la 
   utilisateurs, avec le motif et les pages concernées.
 - Une maintenance démarrée à la main **sans date de fin** est remplacée par la maintenance planifiée suivante
   quand celle-ci démarre.
+- **Répétition** : une maintenance peut se répéter chaque jour, semaine ou mois (heure locale conservée malgré
+  le changement d'heure). Supprimer l'occurrence suivante arrête la série.
+- **Modèles** : enregistre un motif / des pages / une durée comme modèle et réutilise-le (onglet Paramètres).
+- **Notifications push** (application mobile…) : avant le début, au début, avant la fin, à la fin.
+- **Historique** des dernières maintenances (qui, quand, comment elles ont fini), visible par les administrateurs.
+- **Bandeau** « Mode maintenance actif » pour les utilisateurs non bloqués, avec lien vers le panneau.
+- **Réparations** : alerte si une automatisation sélectionnée n'existe plus.
 - L'état et le planning sont conservés après un redémarrage ; ce qui est arrivé à échéance pendant
   l'arrêt est rattrapé au démarrage.
 
 ## Entités
 
 - `switch.mode_maintenance` : démarre / arrête une maintenance immédiate.
-- `sensor.mode_maintenance_prochaine_maintenance` : début de la prochaine maintenance (horodatage), utile
-  dans tes propres automatisations.
+- `sensor.mode_maintenance_prochaine_maintenance` : début de la prochaine maintenance (horodatage).
+- `calendar.mode_maintenance_planning` : maintenances en cours et planifiées (répétitions incluses). Une maintenance
+  sans fin est affichée sur 24 h. Utilisable dans le calendrier de HA et comme déclencheur d'automatisation.
+
+## Services (administrateurs)
+
+| Service | Rôle |
+|---|---|
+| `maintenance_mode.start` | démarre une maintenance (`duration` **ou** `end`, `reason`, `pages`, `pause_automations`) |
+| `maintenance_mode.stop` | termine la maintenance en cours |
+| `maintenance_mode.schedule` | planifie (`start`, `duration` ou `end`, `repeat`: `none`/`daily`/`weekly`/`monthly`, …) |
+| `maintenance_mode.cancel_schedule` | supprime une maintenance planifiée (`window_id`) |
+
+## Évènements
+
+`maintenance_mode_started` et `maintenance_mode_ended` sont émis sur le bus (données : `id`, `start`, `end`, `reason`,
+`pages`, `pause_automations`, `repeat`, `started_by` ; `ended_by` à la fin : `manual`, `auto` ou `replaced`).
+
+```yaml
+automation:
+  - alias: Sauvegarde avant maintenance
+    trigger:
+      - platform: event
+        event_type: maintenance_mode_started
+    action:
+      - service: backup.create
+```
 
 ## Limites importantes
 
 - **Le blocage est visuel (navigateur).** Il masque l'interface mais n'est pas une barrière de sécurité :
   un utilisateur techniquement averti peut encore appeler l'API REST ou le websocket avec son jeton.
+  Un blocage serveur de l'API REST n'est pas possible depuis une intégration personnalisée : le serveur HTTP de
+  Home Assistant démarre avant elles et n'accepte plus de nouveau middleware. Pour un vrai verrouillage, passe par
+  un reverse proxy ou désactive temporairement les comptes concernés.
+- **« Aucun accès » au panneau** retire son entrée du menu latéral côté navigateur (best-effort) ; côté serveur,
+  l'accès est refusé dans tous les cas.
 - L'affichage repose sur des éléments internes du frontend de Home Assistant (`ha-card`, `ha-icon`,
   `hass.auth.revoke()` pour la déconnexion). Ils peuvent évoluer d'une version à l'autre.
-- Le panneau est en français.
+- Panneau et page de blocage : français et anglais ; messages d'erreur du serveur en français.
+- Les icônes (`brand/`) ne s'affichent qu'à partir de Home Assistant 2026.3.
 
 ## Publier une nouvelle version
 

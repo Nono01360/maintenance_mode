@@ -9,5 +9,97 @@
     "abort": {
       "single_instance_allowed": "Une seule instance est autorisée."
     }
+  },
+  "issues": {
+    "missing_automations": {
+      "title": "Automatisations introuvables dans le mode maintenance",
+      "description": "Ces automatisations sélectionnées n'existent plus : {entities}. Mets à jour la liste dans le panneau « Maintenance » (onglet Paramètres)."
+    }
+  },
+  "selector": {
+    "repeat": {
+      "options": {
+        "none": "Aucune",
+        "daily": "Tous les jours",
+        "weekly": "Toutes les semaines",
+        "monthly": "Tous les mois"
+      }
+    }
+  },
+  "services": {
+    "start": {
+      "name": "Démarrer une maintenance",
+      "description": "Démarre immédiatement une maintenance.",
+      "fields": {
+        "duration": {
+          "name": "Durée",
+          "description": "Durée avant la fin (alternative à « Fin »)."
+        },
+        "end": {
+          "name": "Fin",
+          "description": "Date et heure de fin prévues."
+        },
+        "reason": {
+          "name": "Motif",
+          "description": "Motif affiché aux utilisateurs."
+        },
+        "pages": {
+          "name": "Pages",
+          "description": "Pages à bloquer (vide = tout Home Assistant)."
+        },
+        "pause_automations": {
+          "name": "Suspendre les automatisations",
+          "description": "Coupe les automatisations pendant la maintenance."
+        }
+      }
+    },
+    "stop": {
+      "name": "Arrêter la maintenance",
+      "description": "Termine la maintenance en cours."
+    },
+    "schedule": {
+      "name": "Planifier une maintenance",
+      "description": "Ajoute une maintenance à venir.",
+      "fields": {
+        "start": {
+          "name": "Début",
+          "description": "Date et heure de début."
+        },
+        "duration": {
+          "name": "Durée",
+          "description": "Durée (alternative à « Fin »)."
+        },
+        "end": {
+          "name": "Fin",
+          "description": "Date et heure de fin."
+        },
+        "reason": {
+          "name": "Motif",
+          "description": "Motif affiché aux utilisateurs."
+        },
+        "pages": {
+          "name": "Pages",
+          "description": "Pages à bloquer (vide = tout Home Assistant)."
+        },
+        "pause_automations": {
+          "name": "Suspendre les automatisations",
+          "description": "Coupe les automatisations pendant la maintenance."
+        },
+        "repeat": {
+          "name": "Répétition",
+          "description": "Aucune, quotidienne, hebdomadaire ou mensuelle (une fin est requise)."
+        }
+      }
+    },
+    "cancel_schedule": {
+      "name": "Supprimer une maintenance planifiée",
+      "description": "Supprime une maintenance planifiée (et sa série si elle se répète).",
+      "fields": {
+        "window_id": {
+          "name": "Identifiant",
+          "description": "Identifiant de la maintenance (attribut du calendrier / du panneau)."
+        }
+      }
+    }
   }
 }

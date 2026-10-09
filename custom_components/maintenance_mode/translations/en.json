@@ -9,5 +9,97 @@
     "abort": {
       "single_instance_allowed": "Only one instance is allowed."
     }
+  },
+  "issues": {
+    "missing_automations": {
+      "title": "Maintenance mode: automations not found",
+      "description": "These selected automations no longer exist: {entities}. Update the list in the \"Maintenance\" panel (Settings tab)."
+    }
+  },
+  "selector": {
+    "repeat": {
+      "options": {
+        "none": "None",
+        "daily": "Every day",
+        "weekly": "Every week",
+        "monthly": "Every month"
+      }
+    }
+  },
+  "services": {
+    "start": {
+      "name": "Start maintenance",
+      "description": "Starts a maintenance immediately.",
+      "fields": {
+        "duration": {
+          "name": "Duration",
+          "description": "Time until the end (alternative to \"End\")."
+        },
+        "end": {
+          "name": "End",
+          "description": "Expected end date and time."
+        },
+        "reason": {
+          "name": "Reason",
+          "description": "Reason shown to users."
+        },
+        "pages": {
+          "name": "Pages",
+          "description": "Pages to block (empty = all of Home Assistant)."
+        },
+        "pause_automations": {
+          "name": "Pause automations",
+          "description": "Turns automations off during maintenance."
+        }
+      }
+    },
+    "stop": {
+      "name": "Stop maintenance",
+      "description": "Ends the current maintenance."
+    },
+    "schedule": {
+      "name": "Schedule maintenance",
+      "description": "Adds an upcoming maintenance.",
+      "fields": {
+        "start": {
+          "name": "Start",
+          "description": "Start date and time."
+        },
+        "duration": {
+          "name": "Duration",
+          "description": "Duration (alternative to \"End\")."
+        },
+        "end": {
+          "name": "End",
+          "description": "End date and time."
+        },
+        "reason": {
+          "name": "Reason",
+          "description": "Reason shown to users."
+        },
+        "pages": {
+          "name": "Pages",
+          "description": "Pages to block (empty = all of Home Assistant)."
+        },
+        "pause_automations": {
+          "name": "Pause automations",
+          "description": "Turns automations off during maintenance."
+        },
+        "repeat": {
+          "name": "Repeat",
+          "description": "None, daily, weekly or monthly (an end is required)."
+        }
+      }
+    },
+    "cancel_schedule": {
+      "name": "Delete scheduled maintenance",
+      "description": "Deletes a scheduled maintenance (and its series if it repeats).",
+      "fields": {
+        "window_id": {
+          "name": "ID",
+          "description": "Maintenance identifier (calendar / panel attribute)."
+        }
+      }
+    }
   }
 }

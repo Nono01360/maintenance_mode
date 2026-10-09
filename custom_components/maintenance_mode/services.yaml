@@ -1,0 +1,62 @@
+start:
+  fields:
+    duration:
+      selector:
+        duration:
+    end:
+      selector:
+        datetime:
+    reason:
+      selector:
+        text:
+    pages:
+      selector:
+        text:
+          multiple: true
+    pause_automations:
+      default: true
+      selector:
+        boolean:
+
+stop:
+
+schedule:
+  fields:
+    start:
+      required: true
+      selector:
+        datetime:
+    duration:
+      selector:
+        duration:
+    end:
+      selector:
+        datetime:
+    reason:
+      selector:
+        text:
+    pages:
+      selector:
+        text:
+          multiple: true
+    pause_automations:
+      default: true
+      selector:
+        boolean:
+    repeat:
+      default: none
+      selector:
+        select:
+          translation_key: repeat
+          options:
+            - none
+            - daily
+            - weekly
+            - monthly
+
+cancel_schedule:
+  fields:
+    window_id:
+      required: true
+      selector:
+        text:

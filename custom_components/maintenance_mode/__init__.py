@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 
-from . import websocket_api
+from . import services, websocket_api
 from .const import (
     DOMAIN,
     OVERLAY_JS,
@@ -37,6 +37,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     )
     add_extra_js_url(hass, f"{OVERLAY_JS}?v={VERSION}")
     websocket_api.async_register(hass)
+    services.async_register(hass)
     return True
 
 
