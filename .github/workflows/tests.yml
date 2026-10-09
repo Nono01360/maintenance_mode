@@ -13,4 +13,6 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install -r requirements_test.txt
+      - name: Installer le frontend de Home Assistant
+        run: pip install $(python -c "import json,pathlib,homeassistant as h;print(' '.join(json.loads((pathlib.Path(h.__file__).parent/'components'/'frontend'/'manifest.json').read_text())['requirements']))")
       - run: pytest tests -q
