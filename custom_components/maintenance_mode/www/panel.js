@@ -1042,13 +1042,24 @@ async _act(action, target) {
     } else if (action === "delete-role") {
       const idx = Number(target.dataset.idx);
       if (this._confirm === "role:" + idx) {
+        // 1. On retire le rôle du brouillon local
         this._rolesDraft = this._rolesDraft.filter((_, i) => i !== idx);
-        this._rolesDirty = true;
         this._confirm = null;
+        
+        // 2. On prépare la nouvelle liste de rôles sans celui qu'on vient de supprimer
+        const roles = this._rolesDraft
+          .filter((r) => r.name.trim())
+          .map((r) => ({ ...(r.id ? { id: r.id } : {}), name: r.name.trim(), permissions: r.permissions }));
+        
+        // 3. On sauvegarde immédiatement côté serveur
+        if (await this._call("update_config", { roles })) {
+          this._rolesDirty = false;
+          if (this._data?.config) this._onData(this._data);
+        }
       } else {
         this._confirm = "role:" + idx;
+        this._render(true);
       }
-      this._render(true);
     } else if (action === "save-roles") {
       const roles = this._rolesDraft
         .filter((r) => r.name.trim())
