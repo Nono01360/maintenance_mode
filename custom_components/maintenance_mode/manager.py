@@ -28,6 +28,8 @@ from .const import (
     DOMAIN,
     EVENT_ENDED,
     EVENT_STARTED,
+    BANNER_MODES,
+    BUILTIN_ROLE_PERMISSIONS,
     LEGACY_ALLOWED_USERS,
     LEGACY_AUTOMATIONS,
     LEGACY_WARN_MINUTES,
@@ -35,20 +37,29 @@ from .const import (
     MAX_OCCURRENCES,
     MAX_PAGES,
     MAX_REASON,
+    MAX_ROLE_NAME,
+    MAX_ROLES,
     MAX_TEMPLATES,
     MAX_WINDOWS,
     NOTIFY_KINDS,
+    PERMISSIONS,
     REPEATS,
     ROLE_ADMIN,
-    ROLE_NONE,
     ROLE_VIEWER,
-    ROLES,
 )
 
 _LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 1
 _FAR = datetime(9999, 12, 31, tzinfo=dt_util.UTC)
 _NOTIFY_NAME = re.compile(r"^[a-z0-9_]+$")
+# « notify.notify » est un alias hérité dont le comportement dépend de la plateforme qui
+# l'enregistre (aucun, un seul ou tous les appareils) : on le refuse, de même que
+# « send_message » (service par entité). Choisis un service précis (notify.mobile_app_…).
+_FORBIDDEN_NOTIFY = {"notify", "send_message"}
+_SETTINGS_KEYS = (
+    "automations", "allowed_users", "warn_minutes", "end_soon_minutes", "message",
+    "notify_services", "notify_kinds", "banner_mode", "banner_scroll",
+)
 _STEPS = {
     "daily": relativedelta(days=1),
     "weekly": relativedelta(weeks=1),
@@ -171,6 +182,9 @@ def _default_config() -> dict[str, Any]:
         "notify_kinds": list(NOTIFY_KINDS),
         "end_soon_minutes": DEFAULT_END_SOON_MINUTES,
         "templates": [],
+        "roles": [],             # rôles personnalisés : [{id, name, permissions}]
+        "banner_mode": "bar",    # "bar" (bandeau en haut de la page) ou "card"
+        "banner_scroll": True,   # défilement du texte s'il dépasse la fenêtre
     }
 
 
@@ -240,6 +254,9 @@ class MaintenanceManager:
             if data.get("message"):
                 cfg["message"] = data["message"]
         self.config = {**_default_config(), **cfg}
+        self.config["notify_services"] = [
+            n for n in self.config["notify_services"] if n not in _FORBIDDEN_NOTIFY
+        ]
         self.disabled = list(data.get("disabled", []))
         self.history = list(data.get("history", []))[-MAX_HISTORY:]
         self.notified = list(data.get("notified", []))[-200:]
@@ -292,41 +309,86 @@ class MaintenanceManager:
         return [
             u["id"]
             for u in self.users
-            if self.effective_role(u["id"], u["is_owner"], u["is_admin"]) == ROLE_NONE
+            if "view" not in self.role_perms(
+                self.effective_role(u["id"], u["is_owner"], u["is_admin"])
+            )
         ]
 
     @property
     def next_window(self) -> Window | None:
         return self.schedule[0] if self.schedule else None
 
+    # -- rôles et autorisations --
+    @staticmethod
+    def _normalize_perms(perms) -> list[str]:
+        wanted = {p for p in perms if p in PERMISSIONS}
+        if wanted:
+            wanted.add("view")  # sans « view » les autres droits seraient inutilisables
+        return [p for p in PERMISSIONS if p in wanted]
+
+    def role_perms(self, role_id: str, roles: list[dict[str, Any]] | None = None) -> set[str]:
+        if role_id in BUILTIN_ROLE_PERMISSIONS:
+            return set(BUILTIN_ROLE_PERMISSIONS[role_id])
+        for role in self.config["roles"] if roles is None else roles:
+            if role["id"] == role_id:
+                return set(role["permissions"])
+        return set()
+
+    def role_exists(self, role_id: str, roles: list[dict[str, Any]] | None = None) -> bool:
+        return role_id in BUILTIN_ROLE_PERMISSIONS or any(
+            r["id"] == role_id for r in (self.config["roles"] if roles is None else roles)
+        )
+
+    def role_name(self, role_id: str) -> str | None:
+        for role in self.config["roles"]:
+            if role["id"] == role_id:
+                return role["name"]
+        return None  # rôle intégré : le panneau le traduit
+
     def effective_role(self, user_id: str, is_owner: bool, is_admin: bool) -> str:
         if is_owner:
             return ROLE_ADMIN
         role = self.config["panel_access"].get(user_id)
-        if role in ROLES:
+        if role and self.role_exists(role):
             return role
         return ROLE_ADMIN if is_admin else ROLE_VIEWER
 
     def role_for(self, user: Any) -> str:
         return self.effective_role(user.id, user.is_owner, user.is_admin)
 
+    def perms_for(self, user: Any) -> set[str]:
+        return self.role_perms(self.role_for(user))
+
     def state_for(self, user: Any) -> dict[str, Any]:
-        """Données envoyées au panneau, filtrées selon le rôle."""
+        """Données envoyées au panneau, filtrées selon les autorisations."""
         role = self.role_for(user)
-        if role == ROLE_NONE:
-            return {"role": role}
+        perms = self.role_perms(role)
+        if "view" not in perms:
+            return {"role": role, "role_name": self.role_name(role), "permissions": []}
         data: dict[str, Any] = {
             "role": role,
+            "role_name": self.role_name(role),
+            "permissions": [p for p in PERMISSIONS if p in perms],
             "now": iso(dt_util.utcnow()),
             "active": self.current is not None,
             "current": self.current.as_dict() if self.current else None,
             "upcoming": [w.as_dict() for w in self.schedule],
             "message": self.config["message"],
         }
-        if role == ROLE_ADMIN:
+        cfg: dict[str, Any] = {}
+        if "settings" in perms:
+            for key in _SETTINGS_KEYS:
+                value = self.config[key]
+                cfg[key] = list(value) if isinstance(value, list) else value
+        if perms & {"templates", "schedule", "control"}:
+            cfg["templates"] = [dict(t) for t in self.config["templates"]]
+        if "access" in perms:
+            cfg["roles"] = [dict(r) for r in self.config["roles"]]
+            cfg["panel_access"] = dict(self.config["panel_access"])
+        if cfg:
+            data["config"] = cfg
+        if perms & {"settings", "access"}:
             access = self.config["panel_access"]
-            data["config"] = {k: (dict(v) if isinstance(v, dict) else list(v) if isinstance(v, list) else v)
-                              for k, v in self.config.items()}
             data["users"] = [
                 {
                     **u,
@@ -335,7 +397,9 @@ class MaintenanceManager:
                 }
                 for u in self.users
             ]
+        if perms & {"control", "settings"}:
             data["disabled_count"] = len(self.disabled)
+        if "history" in perms:
             data["history"] = list(reversed(self.history))[:20]
         return data
 
@@ -436,7 +500,11 @@ class MaintenanceManager:
             self.schedule.remove(self._find(window_id))
             await self._commit()
 
-    async def async_update_config(self, changes: dict[str, Any]) -> None:
+    async def async_update_config(
+        self, changes: dict[str, Any], actor_perms: set[str] | None = None
+    ) -> None:
+        """Applique des réglages. `actor_perms` : autorisations de l'appelant (None = tout)
+        — il ne peut pas accorder à d'autres des droits qu'il n'a pas lui-même."""
         async with self._lock:
             await self._refresh_users()
             valid = {u["id"] for u in self.users}
@@ -453,22 +521,48 @@ class MaintenanceManager:
                 cfg["end_soon_minutes"] = max(1, min(1440, int(changes["end_soon_minutes"])))
             if "message" in changes:
                 cfg["message"] = str(changes["message"]).strip()[:255] or DEFAULT_MESSAGE
-            if "panel_access" in changes:
-                cfg["panel_access"] = {
-                    uid: role
-                    for uid, role in changes["panel_access"].items()
-                    if uid in valid and role in ROLES
-                }
             if "notify_services" in changes:
                 cfg["notify_services"] = [
                     n
                     for n in dict.fromkeys(changes["notify_services"])
-                    if _NOTIFY_NAME.match(n) and n != "send_message"
+                    if _NOTIFY_NAME.match(n) and n not in _FORBIDDEN_NOTIFY
                 ][:20]
             if "notify_kinds" in changes:
                 cfg["notify_kinds"] = [k for k in NOTIFY_KINDS if k in changes["notify_kinds"]]
+            if "banner_mode" in changes and changes["banner_mode"] in BANNER_MODES:
+                cfg["banner_mode"] = changes["banner_mode"]
+            if "banner_scroll" in changes:
+                cfg["banner_scroll"] = bool(changes["banner_scroll"])
             if "templates" in changes:
                 cfg["templates"] = self._clean_templates(changes["templates"])
+
+            # rôles puis affectations (les affectations sont validées avec les nouveaux rôles)
+            roles = cfg["roles"]
+            if "roles" in changes:
+                roles = self._clean_roles(changes["roles"])
+                if actor_perms is not None:
+                    old = {r["id"]: r for r in cfg["roles"]}
+                    for role in roles:
+                        if old.get(role["id"]) != role and not set(role["permissions"]) <= actor_perms:
+                            raise ServiceValidationError(
+                                "Tu ne peux pas accorder des droits que tu n'as pas toi-même."
+                            )
+            access = dict(cfg["panel_access"])
+            if "panel_access" in changes:
+                access = {
+                    uid: rid
+                    for uid, rid in changes["panel_access"].items()
+                    if uid in valid and self.role_exists(rid, roles)
+                }
+                if actor_perms is not None:
+                    for uid, rid in access.items():
+                        if cfg["panel_access"].get(uid) != rid and not self.role_perms(rid, roles) <= actor_perms:
+                            raise ServiceValidationError(
+                                "Tu ne peux pas accorder des droits que tu n'as pas toi-même."
+                            )
+            # un rôle supprimé : ses utilisateurs retombent sur le rôle par défaut
+            cfg["panel_access"] = {u: r for u, r in access.items() if self.role_exists(r, roles)}
+            cfg["roles"] = roles
             await self._commit()
 
     # ------------------------------------------------------------------ validation
@@ -519,6 +613,24 @@ class MaintenanceManager:
         if self.current and self.current.end and _overlap(start, end, self.current.start, self.current.end):
             raise ServiceValidationError("Cette période chevauche la maintenance en cours.")
         return start, end
+
+    def _clean_roles(self, raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        existing = {r["id"] for r in self.config["roles"]}
+        out: list[dict[str, Any]] = []
+        used: set[str] = set()
+        for r in raw[:MAX_ROLES]:
+            name = str(r.get("name", "")).strip()[:MAX_ROLE_NAME]
+            if not name:
+                continue
+            rid = str(r.get("id") or "")
+            if rid in BUILTIN_ROLE_PERMISSIONS or rid in used or (rid and rid not in existing):
+                rid = ""  # identifiant inconnu ou déjà pris : on en génère un
+            rid = rid or f"r{uuid.uuid4().hex[:6]}"
+            used.add(rid)
+            out.append(
+                {"id": rid, "name": name, "permissions": self._normalize_perms(r.get("permissions", []))}
+            )
+        return out
 
     @staticmethod
     def _clean_templates(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -596,7 +708,7 @@ class MaintenanceManager:
             return
         title, message = _notification_text(self.hass, kind, window)
         for name in services:
-            if not self.hass.services.has_service("notify", name):
+            if name in _FORBIDDEN_NOTIFY or not self.hass.services.has_service("notify", name):
                 continue
             try:
                 await self.hass.services.async_call(

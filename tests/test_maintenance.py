@@ -200,7 +200,8 @@ async def test_ws_roles(hass, hass_ws_client, hass_access_token, hass_admin_user
     await m.async_update_config({"panel_access": {hass_admin_user.id: "none"}})
     await client.send_json({"id": 7, "type": "maintenance_mode/get_state"})
     res = await client.receive_json()
-    assert res["result"] == {"role": "none"}
+    assert res["result"]["role"] == "none" and res["result"]["permissions"] == []
+    assert "upcoming" not in res["result"] and "config" not in res["result"]
     await client.send_json({"id": 8, "type": "maintenance_mode/update_config", "message": "pirate"})
     res = await client.receive_json()
     assert not res["success"] and res["error"]["code"] == "unauthorized"

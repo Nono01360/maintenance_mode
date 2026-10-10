@@ -40,6 +40,8 @@ class MaintenanceSwitch(MaintenanceEntity, SwitchEntity):
             "exempt_users": m.exempt_users,
             "panel_hidden_for": m.hidden_panel_users,
             "message": m.config["message"],
+            "banner_mode": m.config["banner_mode"],
+            "banner_scroll": m.config["banner_scroll"],
             "warn_minutes": m.config["warn_minutes"],
             "current": m.current.as_dict() if m.current else None,
             "next": m.next_window.as_dict() if m.next_window else None,

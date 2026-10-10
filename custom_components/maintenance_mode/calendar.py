@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.core import HomeAssistant
-from homeassistant.util import dt as dt_util
 
 from .entity import MaintenanceEntity
 from .manager import Window

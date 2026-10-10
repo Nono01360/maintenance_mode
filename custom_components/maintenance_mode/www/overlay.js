@@ -7,6 +7,7 @@
   const OVERLAY_ID = "maintenance-overlay";
   const TOAST_ID = "maintenance-toast";
   const BANNER_ID = "maintenance-banner";
+  const BAR_ID = "maintenance-bar";
   const STYLE_ID = "maintenance-style";
   const DISMISS_KEY = "maintenance_mode_dismissed";
 
@@ -178,6 +179,34 @@
     #${BANNER_ID} .icon { color: var(--warning-color, #ff9800); display: flex; }
     #${BANNER_ID} .sub { color: var(--secondary-text-color); font-size: 12px; }
 
+    #${BAR_ID} {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100000;
+      display: flex; align-items: center; gap: 10px; box-sizing: border-box;
+      padding: 6px 12px; padding-top: calc(6px + env(safe-area-inset-top, 0px));
+      font: 14px/1.4 var(--paper-font-body1_-_font-family, Roboto, sans-serif);
+      box-shadow: 0 2px 6px rgba(0,0,0,.25);
+    }
+    #${BAR_ID}.active { background: var(--warning-color, #ff9800); color: #1b1b1b; }
+    #${BAR_ID}.upcoming { background: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff); }
+    #${BAR_ID} .icon { display: flex; flex: none; }
+    #${BAR_ID} .viewport { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; }
+    #${BAR_ID} .track { display: inline-block; }
+    #${BAR_ID} .viewport.scroll .track {
+      padding-left: 100%; animation: maint-marquee var(--dur, 20s) linear infinite;
+    }
+    #${BAR_ID} .viewport.scroll:hover .track { animation-play-state: paused; }
+    #${BAR_ID} .viewport.wrap { white-space: normal; overflow-y: auto; max-height: 36vh; overflow-wrap: anywhere; }
+    #${BAR_ID} .btn {
+      flex: none; border: 1px solid currentColor; background: transparent; color: inherit;
+      border-radius: 14px; padding: 2px 12px; font: inherit; font-size: 13px; cursor: pointer;
+    }
+    #${BAR_ID} .close {
+      flex: none; border: none; background: transparent; color: inherit; cursor: pointer;
+      display: flex; padding: 4px; border-radius: 50%;
+    }
+    #${BAR_ID} .close:hover, #${BAR_ID} .btn:hover { background: rgba(0,0,0,.12); }
+
+    @keyframes maint-marquee { from { transform: translateX(0); } to { transform: translateX(-100%); } }
     @keyframes maint-pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: .6; transform: scale(.92); }
@@ -279,26 +308,96 @@
     return `${name} › ${rest.charAt(0).toUpperCase()}${rest.slice(1)}`;
   };
 
-  // Masque l'entrée « Maintenance » de la barre latérale (best-effort : dépend
-  // de la structure interne du frontend). La feuille de style injectée dans le
-  // shadow DOM de la barre survit à ses re-rendus ; elle est reposée au tick suivant
-  // si la barre est recréée.
-  const setPanelHidden = (hide) => {
-    try {
-      const main = getHaEl()?.shadowRoot?.querySelector("home-assistant-main");
-      const sb =
-        main?.shadowRoot?.querySelector("ha-drawer ha-sidebar") ||
-        main?.shadowRoot?.querySelector("ha-sidebar");
-      const root = sb?.shadowRoot;
-      if (!root) return;
-      const existing = root.querySelector(`#${SIDEBAR_STYLE_ID}`);
-      if (hide && !existing) {
-        root.appendChild(el("style", { id: SIDEBAR_STYLE_ID },
-          `[data-panel="${PANEL_PATH}"], [href="/${PANEL_PATH}"] { display: none !important; }`));
-      } else if (!hide && existing) {
-        existing.remove();
+  // ---------- barre latérale : masquer l'entrée « Maintenance » ----------
+  // Deux mécanismes complémentaires :
+  //  1. masquage DOM de l'entrée (recherche récursive dans les shadow DOM, MutationObserver) ;
+  //  2. préférence native de l'utilisateur (« panneaux masqués » de la barre latérale).
+  const deepFind = (start, selector) => {
+    const queue = [start];
+    for (let i = 0; i < queue.length && i < 30000; i++) {
+      const node = queue[i];
+      if (node.matches && node.matches(selector)) return node;
+      if (node.shadowRoot) queue.push(node.shadowRoot);
+      for (const c of node.children || []) queue.push(c);
+    }
+    return null;
+  };
+
+  const isPanelItem = (node) => {
+    if (!node.getAttribute) return false;
+    if (node.getAttribute("data-panel") === PANEL_PATH) return true;
+    const href = node.getAttribute("href") || (typeof node.href === "string" ? node.href : "");
+    return !!href && new RegExp(`(^|/)${PANEL_PATH}/?$`).test(href.split(/[?#]/)[0]);
+  };
+
+  let sidebarEl = null;
+  let sidebarObserver = null;
+  let sidebarSearchAt = 0;
+  let wantHidden = false;
+  const hiddenEls = new Set();
+
+  const applySidebar = () => {
+    const root = sidebarEl?.shadowRoot;
+    if (!root) return;
+    if (!wantHidden) {
+      hiddenEls.forEach((n) => n.style.removeProperty("display"));
+      hiddenEls.clear();
+      return;
+    }
+    const queue = [...root.children];
+    for (let i = 0; i < queue.length && i < 5000; i++) {
+      const n = queue[i];
+      if (isPanelItem(n)) {            // l'élément le plus extérieur suffit
+        if (!hiddenEls.has(n)) { n.style.setProperty("display", "none", "important"); hiddenEls.add(n); }
+        continue;
       }
-    } catch (_) { /* ignore */ }
+      if (n.shadowRoot) queue.push(...n.shadowRoot.children);
+      queue.push(...n.children);
+    }
+  };
+
+  const setPanelHidden = (hide) => {
+    wantHidden = hide;
+    if (!sidebarEl || !sidebarEl.isConnected) {
+      sidebarObserver?.disconnect();
+      sidebarObserver = null;
+      sidebarEl = null;
+      hiddenEls.clear();
+      if (!hide) return;
+      if (Date.now() - sidebarSearchAt < 3000) return;   // on ne fouille pas le DOM chaque seconde
+      sidebarSearchAt = Date.now();
+      sidebarEl = deepFind(getHaEl(), "ha-sidebar");
+      if (sidebarEl?.shadowRoot) {
+        sidebarObserver = new MutationObserver(() => applySidebar());
+        sidebarObserver.observe(sidebarEl.shadowRoot, { childList: true, subtree: true });
+      }
+    }
+    applySidebar();
+  };
+
+  let prefSynced = null;
+  const syncSidebarPref = async (hass, hide) => {
+    if (prefSynced === hide) return;
+    prefSynced = hide;
+    const marker = `maintenance_mode_hidden:${hass.user.id}`;
+    try {
+      const res = await hass.callWS({ type: "frontend/get_user_data", key: "sidebar" });
+      const value = res?.value && typeof res.value === "object" ? res.value : {};
+      const hidden = Array.isArray(value.hiddenPanels) ? value.hiddenPanels : [];
+      const has = hidden.includes(PANEL_PATH);
+      if (hide && !has) {
+        await hass.callWS({ type: "frontend/set_user_data", key: "sidebar",
+          value: { ...value, panelOrder: value.panelOrder || [], hiddenPanels: [...hidden, PANEL_PATH] } });
+        localStorage.setItem(marker, "1");
+      } else if (!hide && has && localStorage.getItem(marker)) {
+        // on ne retire que ce que NOUS avons masqué (le choix de l'utilisateur est respecté)
+        await hass.callWS({ type: "frontend/set_user_data", key: "sidebar",
+          value: { ...value, hiddenPanels: hidden.filter((p) => p !== PANEL_PATH) } });
+        localStorage.removeItem(marker);
+      }
+    } catch (err) {
+      console.debug("maintenance_mode: préférence de barre latérale non modifiée", err);
+    }
   };
 
   // ---------- recherche de l'entité (même renommée) ----------
@@ -484,36 +583,158 @@
     banner = null;
   };
 
+  // ---------- bandeau en haut de TOUTE la page (mode « bar ») ----------
+  const BAR_DISMISS_KEY = "maintenance_mode_bar_dismissed";
+  let bar = null;
+
+  const reducedMotion = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+  // Repousse toute l'interface Home Assistant sous le bandeau. Un `transform` fait de
+  // l'élément le repère des éléments « fixed » (en-tête, barre latérale, boîtes de dialogue).
+  const pushPage = (px) => {
+    const ha = getHaEl();
+    if (!ha) return;
+    ha.style.transform = px > 0 ? `translateY(${px}px)` : "";
+    ha.style.height = px > 0 ? `calc(100% - ${px}px)` : "";
+  };
+
+  const barDismissed = (key) => {
+    try { return sessionStorage.getItem(BAR_DISMISS_KEY) === key; } catch { return false; }
+  };
+
+  const buildBar = (kind) => {
+    ensureStyle();
+    const r = {};
+    r.track = el("span", { class: "track" });
+    r.viewport = el("div", { class: "viewport" }, r.track);
+    r.open = el("button", { class: "btn", type: "button" });
+    r.close = el("button", { class: "close", type: "button" }, icon("mdi:close"));
+    const root = el("div", { id: BAR_ID, class: kind },
+      el("span", { class: "icon" }, icon("mdi:wrench-clock")), r.viewport, r.open, r.close);
+    document.body.appendChild(root);
+    return { root, r, kind, key: "", text: "", mode: null, width: 0, scrollOpt: null, pushed: -1 };
+  };
+
+  // Texte trop long ? défilement (option) ou retour à la ligne avec ascenseur vertical
+  const fitBar = (scrollOpt) => {
+    const { r } = bar;
+    r.viewport.classList.remove("scroll", "wrap");
+    bar.mode = "none";
+    if (r.track.offsetWidth <= r.viewport.clientWidth) return;
+    if (scrollOpt && !reducedMotion()) {
+      r.viewport.style.setProperty("--dur", `${Math.max(12, Math.round(r.track.offsetWidth / 60))}s`);
+      r.viewport.classList.add("scroll");
+      bar.mode = "scroll";
+    } else {
+      r.viewport.classList.add("wrap");
+      bar.mode = "wrap";
+    }
+  };
+
+  const removeBar = () => {
+    if (!bar) return;
+    bar.root.remove();
+    bar = null;
+    pushPage(0);
+  };
+
+  const renderBar = (kind, key, text, o) => {
+    if (barDismissed(key)) { removeBar(); return; }
+    if (bar && bar.kind !== kind) removeBar();
+    if (!bar) {
+      bar = buildBar(kind);
+      bar.r.close.addEventListener("click", () => {
+        try { sessionStorage.setItem(BAR_DISMISS_KEY, bar.key); } catch { /* ignore */ }
+        removeBar();
+      });
+      bar.r.open.addEventListener("click", () => {
+        history.pushState(null, "", `/${PANEL_PATH}`);
+        window.dispatchEvent(new CustomEvent("location-changed"));
+      });
+    }
+    bar.key = key;
+    const { r } = bar;
+    const changed = text !== bar.text;
+    if (changed) { r.track.textContent = text; bar.text = text; }
+    r.open.textContent = o.openLabel;
+    r.open.style.display = o.canOpen ? "" : "none";
+    r.close.setAttribute("aria-label", o.closeLabel);
+    if (bar.mode === null || r.viewport.clientWidth !== bar.width || bar.scrollOpt !== o.scroll
+        || (changed && bar.mode === "none")) {
+      fitBar(o.scroll);
+      bar.width = r.viewport.clientWidth;
+      bar.scrollOpt = o.scroll;
+    }
+    const h = Math.ceil(bar.root.getBoundingClientRect().height);
+    if (h !== bar.pushed) { pushPage(h); bar.pushed = h; }
+  };
+
+  const pagesText = (pages, hass, lang, tx) =>
+    `${tx.pages} ${pages.map((p) => pageLabel(p, hass, lang, tx)).join(", ")}`;
+
+  const renderActiveBar = (st, cur, hass, now, canOpen) => {
+    const { lang, tx } = i18n(hass);
+    const parts = [tx.active];
+    if (cur.reason) parts.push(`${tx.reason} ${cur.reason}`);
+    if (cur.end) parts.push(`${tx.expectedEnd} ${fmt(cur.end, lang)} · ${rel(Math.max(0, cur.end - now), lang)}`);
+    if (cur.pages?.length) parts.push(pagesText(cur.pages, hass, lang, tx));
+    renderBar("active", `active:${cur.id}`, parts.join("  ·  "),
+      { scroll: st.attributes.banner_scroll !== false, canOpen, openLabel: tx.open, closeLabel: tx.close });
+  };
+
+  const renderUpcomingBar = (st, hass, now) => {
+    const w = parseWin(st.attributes.next);
+    const warnMs = (Number(st.attributes.warn_minutes) || 15) * 60000;
+    if (!(w && w.start && w.start > now && w.start - now <= warnMs)) { removeBar(); return; }
+    const { lang, tx } = i18n(hass);
+    const parts = [tx.soon, `${tx.starts} ${rel(w.start - now, lang)} (${fmt(w.start, lang)})`];
+    if (w.end) parts.push(`${tx.expectedEnd} ${fmt(w.end, lang)}`);
+    if (w.reason) parts.push(`${tx.reason} ${w.reason}`);
+    if (w.pages?.length) parts.push(pagesText(w.pages, hass, lang, tx));
+    renderBar("upcoming", dismissKey(w), parts.join("  ·  "),
+      { scroll: st.attributes.banner_scroll !== false, canOpen: false, openLabel: tx.open, closeLabel: tx.close });
+  };
+
   // ---------- boucle principale ----------
   const check = () => {
     const hass = getHass();
     if (!hass?.user) return;
     const st = findState(hass);
-    if (!st) { setPanelHidden(false); removeOverlay(); removeToast(); removeBanner(); return; }
+    if (!st) {
+      setPanelHidden(false); syncSidebarPref(hass, false);
+      removeOverlay(); removeToast(); removeBanner(); removeBar();
+      return;
+    }
 
     // Utilisateur sans accès au panneau : on retire son entrée du menu latéral.
     const panelHidden = !hass.user.is_owner && (st.attributes.panel_hidden_for || []).includes(hass.user.id);
     setPanelHidden(panelHidden);
+    syncSidebarPref(hass, panelHidden);
 
     const now = new Date();
     const cur = parseWin(st.attributes.current);
     const exempt = hass.user.is_owner || (st.attributes.exempt_users || []).includes(hass.user.id);
+    const barMode = st.attributes.banner_mode !== "card";   // « bar » par défaut
 
     if (st.state === "on" && cur && !exempt && pageBlocked(cur.pages)) {
-      removeToast();
-      removeBanner();
+      removeToast(); removeBanner(); removeBar();
       renderOverlay(st, cur, hass, now);
-    } else {
-      removeOverlay();
-      if (st.state === "on") {
-        removeToast();
-        // Non bloqué alors que la maintenance les concernerait : on le rappelle discrètement
-        if (cur && exempt && pageBlocked(cur.pages)) renderBanner(cur, hass, now, !panelHidden);
-        else removeBanner();
+      return;
+    }
+    removeOverlay();
+    if (st.state === "on") {
+      removeToast();
+      // Non bloqué alors que la maintenance les concernerait : on le rappelle
+      if (cur && exempt && pageBlocked(cur.pages)) {
+        if (barMode) { removeBanner(); renderActiveBar(st, cur, hass, now, !panelHidden); }
+        else { removeBar(); renderBanner(cur, hass, now, !panelHidden); }
       } else {
-        removeBanner();
-        renderToast(st, hass, now);
+        removeBanner(); removeBar();
       }
+    } else {
+      removeBanner();
+      if (barMode) { removeToast(); renderUpcomingBar(st, hass, now); }
+      else { removeBar(); renderToast(st, hass, now); }
     }
   };
 

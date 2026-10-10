@@ -52,6 +52,20 @@ const T = {
     u_owner: "propriétaire", u_admin: "administrateur", u_user: "utilisateur",
     h_title: "Historique", h_empty: "Aucune maintenance passée.", h_by: "par {who}",
     e_manual: "arrêtée à la main", e_auto: "terminée automatiquement", e_replaced: "remplacée par une autre",
+    perm_view: "Voir les maintenances", perm_history: "Voir l'historique",
+    perm_control: "Démarrer, modifier et terminer la maintenance en cours",
+    perm_schedule: "Planifier, modifier, dupliquer et supprimer des maintenances",
+    perm_templates: "Gérer les modèles", perm_settings: "Modifier les paramètres (message, automatisations, notifications…)",
+    perm_access: "Gérer les rôles et les accès",
+    r_title: "Rôles personnalisés",
+    r_hint: "Crée des rôles avec seulement les autorisations utiles. « Voir les maintenances » est ajouté automatiquement. Tu ne peux accorder que des autorisations que tu possèdes toi-même. Supprimer un rôle remet ses utilisateurs sur « Par défaut ».",
+    r_none_yet: "Aucun rôle personnalisé.", r_add: "Ajouter un rôle", r_name_ph: "Nom du rôle",
+    r_save: "Enregistrer les rôles", r_new: "Nouveau rôle", r_builtin: "Rôles intégrés : Aucun accès (rien), Vue utilisateur (lecture), Vue administrateur (tout).",
+    r_not_allowed: "contient des droits que tu n'as pas",
+    s_banner: "Notification dans l'interface", banner_mode: "Affichage",
+    banner_bar: "Bandeau en haut de toute la page", banner_card: "Petite carte en haut à droite",
+    banner_scroll: "Faire défiler le texte s'il dépasse la fenêtre",
+    banner_hint: "Sans défilement, le texte passe à la ligne (avec un ascenseur s'il est très long). Le bandeau repousse l'interface vers le bas ; en cas de problème d'affichage, choisis la petite carte.",
   },
   en: {
     title: "Maintenance", tab_list: "Maintenance", tab_settings: "Settings", tab_access: "Access",
@@ -97,6 +111,20 @@ const T = {
     u_owner: "owner", u_admin: "administrator", u_user: "user",
     h_title: "History", h_empty: "No past maintenance.", h_by: "by {who}",
     e_manual: "stopped manually", e_auto: "ended automatically", e_replaced: "replaced by another",
+    perm_view: "View maintenance", perm_history: "View history",
+    perm_control: "Start, edit and end the current maintenance",
+    perm_schedule: "Schedule, edit, duplicate and delete maintenance",
+    perm_templates: "Manage templates", perm_settings: "Change settings (message, automations, notifications…)",
+    perm_access: "Manage roles and access",
+    r_title: "Custom roles",
+    r_hint: "Create roles with only the permissions needed. \"View maintenance\" is added automatically. You can only grant permissions you hold yourself. Deleting a role puts its users back on \"Default\".",
+    r_none_yet: "No custom role.", r_add: "Add a role", r_name_ph: "Role name",
+    r_save: "Save roles", r_new: "New role", r_builtin: "Built-in roles: No access (nothing), User view (read-only), Administrator view (everything).",
+    r_not_allowed: "contains permissions you do not have",
+    s_banner: "In-app notification", banner_mode: "Display",
+    banner_bar: "Banner across the top of the whole page", banner_card: "Small card at the top right",
+    banner_scroll: "Scroll the text when it does not fit the window",
+    banner_hint: "Without scrolling, the text wraps (with a scrollbar if very long). The banner pushes the interface down; if the display looks wrong, choose the small card.",
   },
 };
 
@@ -122,6 +150,7 @@ const EXTRA_PAGES = {
 };
 
 const NOTIFY_KINDS = ["pre", "started", "end_soon", "ended"];
+const PERMS_ALL = ["view", "history", "control", "schedule", "templates", "settings", "access"];
 
 const STYLES = `
   :host { display: block; height: 100%; background: var(--primary-background-color);
@@ -254,6 +283,14 @@ class MaintenanceModePanel extends HTMLElement {
   // ---------- traduction ----------
   _lang() { return this._hass?.locale?.language || "fr"; }
   _code() { const c = this._lang().split("-")[0]; return T[c] ? c : "en"; }
+  _can(perm) { return (this._data?.permissions || []).includes(perm); }
+
+  _tabAllowed(tab) {
+    if (tab === "settings") return this._can("settings") || this._can("templates");
+    if (tab === "access") return this._can("access");
+    return true;
+  }
+
   _t(key, vars = {}) {
     let s = T[this._code()][key] ?? T.en[key] ?? key;
     for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, esc(v));
@@ -270,8 +307,13 @@ class MaintenanceModePanel extends HTMLElement {
 
   _onData(d) {
     this._data = d;
-    if (d.config && (!this._draft || !this._draftDirty)) {
+    if (d.config?.roles && (!this._rolesDraft || !this._rolesDirty)) {
+      this._rolesDraft = d.config.roles.map((r) => ({ id: r.id, name: r.name, permissions: [...r.permissions] }));
+    }
+    if (d.config?.automations && (!this._draft || !this._draftDirty)) {
       this._draft = {
+        banner_mode: d.config.banner_mode || "bar",
+        banner_scroll: d.config.banner_scroll !== false,
         automations: [...d.config.automations],
         allowed_users: [...d.config.allowed_users],
         warn_minutes: d.config.warn_minutes,
@@ -281,7 +323,7 @@ class MaintenanceModePanel extends HTMLElement {
         notify_kinds: [...d.config.notify_kinds],
       };
     }
-    if (d.role !== "admin" && this._tab !== "list") this._tab = "list";
+    if (!this._tabAllowed(this._tab)) this._tab = "list";
     this._render();
   }
 
@@ -358,7 +400,7 @@ class MaintenanceModePanel extends HTMLElement {
 
   _notifyServices() {
     return Object.keys(this._hass?.services?.notify || {})
-      .filter((n) => n !== "send_message").sort();
+      .filter((n) => !["send_message", "notify"].includes(n)).sort();  // « notify.notify » : alias ambigu, refusé
   }
 
   // ---------- rendu ----------
@@ -408,7 +450,9 @@ class MaintenanceModePanel extends HTMLElement {
   }
 
   _barHtml() {
-    const admin = this._data?.role === "admin";
+    const tabs = [["list", "tab_list"]];
+    if (this._tabAllowed("settings")) tabs.push(["settings", "tab_settings"]);
+    if (this._tabAllowed("access")) tabs.push(["access", "tab_access"]);
     const tab = (id, label) =>
       `<button class="tab ${this._tab === id ? "active" : ""}" data-action="tab" data-tab="${id}">${label}</button>`;
     return `<div class="bar">
@@ -417,7 +461,7 @@ class MaintenanceModePanel extends HTMLElement {
           <ha-icon icon="mdi:menu"></ha-icon></button>
         <h1>${this._t("title")}</h1>
       </div>
-      ${admin ? `<div class="tabs">${tab("list", this._t("tab_list"))}${tab("settings", this._t("tab_settings"))}${tab("access", this._t("tab_access"))}</div>` : ""}
+      ${tabs.length > 1 ? `<div class="tabs">${tabs.map(([id, key]) => tab(id, this._t(key))).join("")}</div>` : ""}
     </div>`;
   }
 
@@ -429,20 +473,21 @@ class MaintenanceModePanel extends HTMLElement {
     if (!this._data) {
       return `<ha-card class="card"><div class="empty"><ha-icon icon="mdi:timer-sand"></ha-icon>${this._t("loading")}</div></ha-card>`;
     }
-    if (this._data.role === "none") {
+    if (!(this._data.permissions || []).length) {
       return `<ha-card class="card"><div class="empty"><ha-icon icon="mdi:lock-outline"></ha-icon>
         ${this._t("no_access")}<br><span class="muted">${this._t("no_access_hint")}</span></div></ha-card>`;
     }
     const err = this._error ? `<div class="banner error">${esc(this._error)}</div>` : "";
-    if (this._data.role === "admin" && this._tab === "settings") return err + this._settingsHtml();
-    if (this._data.role === "admin" && this._tab === "access") return err + this._accessHtml();
+    if (this._tab === "settings" && this._tabAllowed("settings")) return err + this._settingsHtml();
+    if (this._tab === "access" && this._tabAllowed("access")) return err + this._accessHtml();
     return err + this._listHtml();
   }
 
   // ----- onglet « Maintenances » -----
   _listHtml() {
     const d = this._data;
-    const admin = d.role === "admin";
+    const canControl = this._can("control");
+    const canSchedule = this._can("schedule");
     const cur = d.current;
     let html = "";
 
@@ -456,9 +501,9 @@ class MaintenanceModePanel extends HTMLElement {
           <div class="muted">${this._t("since", { start: this._fmt(cur.start) })} · ${end}</div>
           ${cur.reason ? `<div style="margin-top:6px">${esc(cur.reason)}</div>` : ""}
           ${this._chips(cur)}
-          ${admin && d.disabled_count ? `<div class="muted" style="margin-top:6px">${this._t("paused_n", { n: d.disabled_count })}</div>` : ""}
+          ${canControl && d.disabled_count ? `<div class="muted" style="margin-top:6px">${this._t("paused_n", { n: d.disabled_count })}</div>` : ""}
         </div></div>
-        ${admin ? `<div class="actions">
+        ${canControl ? `<div class="actions">
           <button class="btn" data-action="edit-current">${this._t("edit")}</button>
           <button class="btn danger" data-action="stop-current">${this._confirm === "stop" ? this._t("confirm_stop") : this._t("stop_now")}</button>
         </div>` : ""}</ha-card>`;
@@ -473,7 +518,7 @@ class MaintenanceModePanel extends HTMLElement {
         <div class="grow"><h2>${this._t("none_running")}</h2>
           <div class="muted">${next ? this._t("next", { start: this._fmt(next.start), rel: this._rel(next.start) }) : this._t("none_planned")}</div>
         </div></div>
-        ${admin ? `<div class="actions"><button class="btn primary" data-action="start-now">${this._t("start_btn")}</button></div>` : ""}
+        ${canControl ? `<div class="actions"><button class="btn primary" data-action="start-now">${this._t("start_btn")}</button></div>` : ""}
       </ha-card>`;
 
       if (this._form && (this._form.mode === "now" || (this._form.mode === "add" && !this._form.id))) {
@@ -482,7 +527,7 @@ class MaintenanceModePanel extends HTMLElement {
     }
 
     html += `<ha-card class="card"><div class="row"><div class="grow"><h2>${this._t("planned_title")}</h2></div>
-      ${admin && (!this._form || this._form.id) ? `<button class="btn primary sm" data-action="open-add">${this._t("plan_btn")}</button>` : ""}</div>`;
+      ${canSchedule && (!this._form || this._form.id) ? `<button class="btn primary sm" data-action="open-add">${this._t("plan_btn")}</button>` : ""}</div>`;
     if (!d.upcoming.length) {
       html += `<div class="empty"><ha-icon icon="mdi:calendar-blank-outline"></ha-icon>${this._t("nothing")}</div>`;
     } else {
@@ -496,9 +541,9 @@ class MaintenanceModePanel extends HTMLElement {
               <div class="muted">${esc(this._range(w))}</div>
               ${w.reason ? `<div style="margin-top:4px">${esc(w.reason)}</div>` : ""}
               ${this._chips(w)}
-              ${admin && !w.pause_automations ? `<div class="muted" style="margin-top:4px">${this._t("autos_kept")}</div>` : ""}
+              ${canSchedule && !w.pause_automations ? `<div class="muted" style="margin-top:4px">${this._t("autos_kept")}</div>` : ""}
             </div>
-            ${admin ? `<div class="col" style="gap:6px">
+            ${canSchedule ? `<div class="col" style="gap:6px">
               <button class="btn sm" data-action="edit-item" data-id="${esc(w.id)}">${this._t("edit")}</button>
               <button class="btn sm" data-action="duplicate-item" data-id="${esc(w.id)}">${this._t("duplicate")}</button>
               <button class="btn sm danger" data-action="delete-item" data-id="${esc(w.id)}">${deleteText}</button>
@@ -510,7 +555,7 @@ class MaintenanceModePanel extends HTMLElement {
     }
     html += `</ha-card>`;
 
-    if (admin) html += this._historyHtml();
+    if (d.history) html += this._historyHtml();
     return html;
   }
 
@@ -587,7 +632,7 @@ _historyHtml() {
         <button class="btn primary" data-action="save-form">${this._t("save")}</button>
         <button class="btn" data-action="cancel-form">${this._t("cancel")}</button>
       </div>
-      ${showTpl ? `<div class="row">
+      ${showTpl && this._can("templates") ? `<div class="row">
         <input type="text" maxlength="40" placeholder="${esc(this._t("tpl_name_ph"))}" data-field="form.tplName" value="${esc(f.tplName)}">
         <button class="btn sm" data-action="save-template">${this._t("tpl_save")}</button></div>` : ""}
     ${containerEnd}`;
@@ -595,13 +640,17 @@ _historyHtml() {
 
   // ----- onglet « Paramètres » -----
   _settingsHtml() {
+    return (this._can("settings") ? this._settingsMainHtml() : "") +
+      (this._can("templates") ? this._templatesHtml() : "");
+  }
+
+  _settingsMainHtml() {
     const dr = this._draft;
     const users = this._data.users || [];
     const autos = this._automations();
     const f = this._autoFilter.toLowerCase();
     const selected = new Set(dr.automations);
     const notifyServices = this._notifyServices();
-    const tpls = this._data.config?.templates || [];
     return `
       <ha-card class="card"><div class="col">
         <h2>${this._t("s_page")}</h2>
@@ -652,11 +701,26 @@ _historyHtml() {
           <input type="number" min="1" max="1440" data-field="draft.endsoon" value="${esc(dr.end_soon_minutes)}"></label>
       </div></ha-card>
 
+      <ha-card class="card"><div class="col">
+        <div><h2>${this._t("s_banner")}</h2><div class="muted">${this._t("banner_hint")}</div></div>
+        <label class="field">${this._t("banner_mode")}
+          <select data-action="banner-mode">
+            <option value="bar" ${dr.banner_mode === "bar" ? "selected" : ""}>${this._t("banner_bar")}</option>
+            <option value="card" ${dr.banner_mode === "card" ? "selected" : ""}>${this._t("banner_card")}</option>
+          </select></label>
+        <label class="check"><input type="checkbox" data-action="toggle-banner-scroll" ${dr.banner_scroll ? "checked" : ""}>
+          <span>${this._t("banner_scroll")}</span></label>
+      </div></ha-card>
+
       <div class="actions" style="margin-top:0">
         <button class="btn primary" data-action="save-settings" ${this._draftDirty ? "" : "disabled"}>${this._t("save_changes")}</button>
         <button class="btn" data-action="reset-settings" ${this._draftDirty ? "" : "disabled"}>${this._t("reset_changes")}</button>
-      </div>
+      </div>`;
+  }
 
+  _templatesHtml() {
+    const tpls = this._data.config?.templates || [];
+    return `
       <ha-card class="card"><div class="col">
         <h2>${this._t("s_templates")}</h2>
         ${tpls.length ? tpls.map((t) => `<div class="item">
@@ -670,10 +734,49 @@ _historyHtml() {
   }
 
   // ----- onglet « Accès » -----
+  _roleOptions() {
+    const own = new Set(this._data.permissions || []);
+    const opts = [["admin", PERMS_ALL], ["viewer", ["view"]], ["none", []]]
+      .map(([id, perms]) => ({ id, name: this._t(`role_${id}`), perms }));
+    for (const r of this._data.config?.roles || []) opts.push({ id: r.id, name: r.name, perms: r.permissions });
+    return opts.map((o) => ({ ...o, allowed: o.perms.every((p) => own.has(p)) }));
+  }
+
   _accessHtml() {
     const users = this._data.users || [];
-    const roleLabel = (r) => this._t(`role_${r}`);
-    return `<ha-card class="card"><div class="col">
+    const options = this._roleOptions();
+    const roleName = (id) => options.find((o) => o.id === id)?.name || id;
+    const own = new Set(this._data.permissions || []);
+    const roles = this._rolesDraft || [];
+    const dirty = this._rolesDirty;
+
+    const rolesCard = `<ha-card class="card"><div class="col">
+      <div><h2>${this._t("r_title")}</h2><div class="muted">${this._t("r_hint")}</div>
+        <div class="muted" style="margin-top:4px">${this._t("r_builtin")}</div></div>
+      ${roles.length ? roles.map((r, i) => {
+        const hasOther = r.permissions.some((p) => p !== "view");
+        return `<div class="item" style="flex-direction:column;gap:8px">
+          <div class="row" style="width:100%">
+            <input type="text" maxlength="30" placeholder="${esc(this._t("r_name_ph"))}" data-field="role.name" data-idx="${i}" value="${esc(r.name)}">
+            <button class="btn sm danger" data-action="delete-role" data-idx="${i}">${this._confirm === "role:" + i ? this._t("confirm_delete") : this._t("delete")}</button>
+          </div>
+          <div class="col" style="gap:0;width:100%">
+            ${PERMS_ALL.map((p) => {
+              const checked = r.permissions.includes(p) || (p === "view" && hasOther);
+              const locked = (p === "view" && hasOther) || (!own.has(p) && !checked);
+              return `<label class="check"><input type="checkbox" data-action="toggle-role-perm" data-idx="${i}" data-perm="${p}"
+                ${checked ? "checked" : ""} ${locked ? "disabled" : ""}><span>${this._t("perm_" + p)}</span></label>`;
+            }).join("")}
+          </div></div>`;
+      }).join("") : `<div class="muted">${this._t("r_none_yet")}</div>`}
+      <div class="actions" style="margin-top:0">
+        <button class="btn sm" data-action="add-role">${this._t("r_add")}</button>
+        <button class="btn primary sm" data-action="save-roles" ${dirty ? "" : "disabled"}>${this._t("r_save")}</button>
+        <button class="btn sm" data-action="reset-roles" ${dirty ? "" : "disabled"}>${this._t("reset_changes")}</button>
+      </div>
+    </div></ha-card>`;
+
+    const usersCard = `<ha-card class="card"><div class="col">
       <div><h2>${this._t("a_title")}</h2><div class="muted">${this._t("a_hint")}</div></div>
       <table>${users.map((u) => `<tr>
         <td><div>${esc(u.name)}</div>
@@ -681,11 +784,12 @@ _historyHtml() {
         <td class="sel">${u.is_owner
           ? `<span class="muted">${this._t("fixed_admin")}</span>`
           : `<select data-action="set-user-role" data-user="${esc(u.id)}">
-              <option value="" ${u.explicit ? "" : "selected"}>${this._t("default_for", { role: roleLabel(u.is_admin ? "admin" : "viewer") })}</option>
-              ${["admin", "viewer", "none"].map((r) =>
-                `<option value="${r}" ${u.explicit && u.role === r ? "selected" : ""}>${roleLabel(r)}</option>`).join("")}
+              <option value="" ${u.explicit ? "" : "selected"}>${this._t("default_for", { role: roleName(u.is_admin ? "admin" : "viewer") })}</option>
+              ${options.map((o) => `<option value="${esc(o.id)}" ${u.explicit && u.role === o.id ? "selected" : ""}
+                ${o.allowed || (u.explicit && u.role === o.id) ? "" : "disabled"}>${esc(o.name)}${o.allowed ? "" : " ⛔"}</option>`).join("")}
             </select>`}</td></tr>`).join("")}</table>
     </div></ha-card>`;
+    return rolesCard + usersCard;
   }
 
   // ---------- événements ----------
@@ -715,9 +819,17 @@ _historyHtml() {
     else if (field === "form.reason") this._form.reason = t.value;
     else if (field === "form.custom") this._form.custom = t.value;
     else if (field === "form.tplName") this._form.tplName = t.value;
+    else if (field === "role.name") { this._rolesDraft[Number(t.dataset.idx)].name = t.value; this._markRolesDirty(); }
     else if (field === "draft.message") { this._draft.message = t.value; this._markDirty(); }
     else if (field === "draft.warn") { this._draft.warn_minutes = Number(t.value) || 15; this._markDirty(); }
     else if (field === "draft.endsoon") { this._draft.end_soon_minutes = Number(t.value) || 10; this._markDirty(); }
+  }
+
+  _markRolesDirty() {
+    if (this._rolesDirty) return;
+    this._rolesDirty = true;
+    this.shadowRoot.querySelectorAll('[data-action="save-roles"], [data-action="reset-roles"]')
+      .forEach((b) => { b.disabled = false; });
   }
 
   _markDirty() {
@@ -798,7 +910,7 @@ _historyHtml() {
   }
 
 async _act(action, target) {
-    const keepConfirm = ["stop-current", "delete-item", "delete-template"];
+    const keepConfirm = ["stop-current", "delete-item", "delete-template", "delete-role"];
     if (!keepConfirm.includes(action)) this._confirm = null;
 
     if (action === "tab") {
@@ -891,6 +1003,8 @@ async _act(action, target) {
         message: this._draft.message,
         notify_services: this._draft.notify_services,
         notify_kinds: this._draft.notify_kinds,
+        banner_mode: this._draft.banner_mode,
+        banner_scroll: this._draft.banner_scroll,
       });
       if (ok) {
         this._draftDirty = false;
@@ -910,6 +1024,43 @@ async _act(action, target) {
         this._confirm = "tpl:" + id;
         this._render(true);
       }
+    } else if (action === "banner-mode") {
+      this._draft.banner_mode = target.value;
+      this._markDirty();
+    } else if (action === "toggle-banner-scroll") {
+      this._draft.banner_scroll = target.checked;
+      this._markDirty();
+    } else if (action === "add-role") {
+      this._rolesDraft = [...(this._rolesDraft || []), { id: null, name: this._t("r_new"), permissions: ["view"] }];
+      this._rolesDirty = true;
+      this._render(true);
+    } else if (action === "toggle-role-perm") {
+      const role = this._rolesDraft[Number(target.dataset.idx)];
+      this._toggle(role.permissions, target.dataset.perm);
+      this._markRolesDirty();
+      this._render(true);
+    } else if (action === "delete-role") {
+      const idx = Number(target.dataset.idx);
+      if (this._confirm === "role:" + idx) {
+        this._rolesDraft = this._rolesDraft.filter((_, i) => i !== idx);
+        this._rolesDirty = true;
+        this._confirm = null;
+      } else {
+        this._confirm = "role:" + idx;
+      }
+      this._render(true);
+    } else if (action === "save-roles") {
+      const roles = this._rolesDraft
+        .filter((r) => r.name.trim())
+        .map((r) => ({ ...(r.id ? { id: r.id } : {}), name: r.name.trim(), permissions: r.permissions }));
+      if (await this._call("update_config", { roles })) {
+        this._rolesDirty = false;
+        if (this._data?.config) this._onData(this._data);
+      }
+    } else if (action === "reset-roles") {
+      this._rolesDirty = false;
+      this._onData(this._data);
+      this._render(true);
     } else if (action === "set-user-role") {
       // CORRECTION : value="" est falsy, donc on supprime l'accès explicite pour revenir au défaut
       const access = { ...(this._data.config?.panel_access || {}) };

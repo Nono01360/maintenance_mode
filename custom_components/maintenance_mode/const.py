@@ -23,6 +23,19 @@ ROLE_VIEWER = "viewer"  # voit les maintenances (vue utilisateur)
 ROLE_ADMIN = "admin"    # configure tout (vue administrateur)
 ROLES = (ROLE_NONE, ROLE_VIEWER, ROLE_ADMIN)
 
+# Autorisations (« view » est implicite dès qu'un rôle en possède une autre)
+PERMISSIONS = ("view", "history", "control", "schedule", "templates", "settings", "access")
+BUILTIN_ROLE_PERMISSIONS = {
+    ROLE_NONE: (),
+    ROLE_VIEWER: ("view",),
+    ROLE_ADMIN: PERMISSIONS,
+}
+MAX_ROLES = 10
+MAX_ROLE_NAME = 30
+
+# Affichage de la notification dans l'interface
+BANNER_MODES = ("bar", "card")
+
 DEFAULT_WARN_MINUTES = 15
 DEFAULT_MESSAGE = "Home Assistant est temporairement indisponible pour cause de maintenance."
 

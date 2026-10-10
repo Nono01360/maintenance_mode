@@ -15,17 +15,38 @@ Les mises à jour apparaissent ensuite dans HACS à chaque nouvelle *release* du
 
 ## Le panneau
 
-| Onglet | Qui | Contenu |
+| Onglet | Visible avec l'autorisation | Contenu |
 |---|---|---|
-| **Maintenances** | tous (en lecture pour la vue utilisateur) | état en cours, maintenances planifiées ; la vue administrateur peut démarrer, planifier, modifier, supprimer |
-| **Paramètres** | vue administrateur | message affiché, préavis de la notification, automatisations suspendues, utilisateurs non impactés |
-| **Accès** | vue administrateur | choisit pour chaque utilisateur : *par défaut*, *aucun accès*, *vue utilisateur* ou *vue administrateur* |
+| **Maintenances** | `view` | état en cours et planning ; selon les autorisations : démarrer / terminer, planifier / modifier / supprimer, historique |
+| **Paramètres** | `settings` et/ou `templates` | message, préavis, automatisations suspendues, utilisateurs non impactés, notifications push, affichage du bandeau (`settings`) ; modèles (`templates`) |
+| **Accès** | `access` | rôles personnalisés et rôle de chaque utilisateur |
 
-Les droits sont **vérifiés côté serveur** : un utilisateur sans la vue administrateur ne peut rien modifier,
-même en appelant l'API directement. Par défaut, les administrateurs de Home Assistant ont la vue
-administrateur et les autres la vue utilisateur. Le propriétaire a toujours la vue administrateur.
+## Rôles et autorisations
 
-> ⚠️ Donner la vue administrateur à un utilisateur non administrateur de Home Assistant lui permet de
+Chaque utilisateur a un **rôle** ; chaque rôle est un ensemble d'**autorisations** :
+
+| Autorisation | Permet de… |
+|---|---|
+| `view` | voir l'état et le planning (ajoutée automatiquement dès qu'un rôle a une autre autorisation) |
+| `history` | voir l'historique |
+| `control` | démarrer, modifier et terminer la maintenance en cours |
+| `schedule` | planifier, modifier, dupliquer et supprimer des maintenances |
+| `templates` | créer et supprimer des modèles |
+| `settings` | modifier les paramètres (message, automatisations, utilisateurs non impactés, notifications, bandeau) |
+| `access` | gérer les rôles personnalisés et les affectations |
+
+Trois rôles sont intégrés : **Aucun accès** (rien, le panneau disparaît du menu), **Vue utilisateur** (`view`) et
+**Vue administrateur** (tout). Dans l'onglet **Accès** tu peux créer jusqu'à 10 rôles personnalisés (par exemple
+« Opérateur » = `control` + `history`) puis les attribuer. Par défaut, les administrateurs de Home Assistant ont la
+vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours la vue administrateur.
+
+- Les droits sont **vérifiés côté serveur** pour chaque action, pas seulement masqués dans l'interface.
+- **Pas d'escalade** : on ne peut créer, modifier ou attribuer un rôle que s'il ne contient aucune autorisation
+  qu'on ne possède pas soi-même.
+- Une autorisation `access` donne un grand pouvoir (créer des rôles, changer les accès) : réserve-la.
+- Supprimer un rôle remet ses utilisateurs sur « Par défaut ».
+
+> ⚠️ Un rôle avec `settings` ou `schedule` donné à un utilisateur non administrateur de Home Assistant lui permet de
 > suspendre des automatisations et de bloquer des pages via ce panneau.
 
 ## Règles de fonctionnement
@@ -44,9 +65,15 @@ administrateur et les autres la vue utilisateur. Le propriétaire a toujours la 
 - **Répétition** : une maintenance peut se répéter chaque jour, semaine ou mois (heure locale conservée malgré
   le changement d'heure). Supprimer l'occurrence suivante arrête la série.
 - **Modèles** : enregistre un motif / des pages / une durée comme modèle et réutilise-le (onglet Paramètres).
-- **Notifications push** (application mobile…) : avant le début, au début, avant la fin, à la fin.
+- **Notifications push** (application mobile…) : avant le début, au début, avant la fin, à la fin. Choisis un service
+  précis (`notify.mobile_app_…`) : l'alias générique `notify.notify` n'est pas proposé, car son comportement dépend de
+  la plateforme qui l'enregistre (aucun, un seul ou tous les appareils).
 - **Historique** des dernières maintenances (qui, quand, comment elles ont fini), visible par les administrateurs.
-- **Bandeau** « Mode maintenance actif » pour les utilisateurs non bloqués, avec lien vers le panneau.
+- **Bandeau** « Mode maintenance actif » pour les utilisateurs non bloqués, avec lien vers le panneau. Deux
+  affichages au choix (Paramètres → Notification dans l'interface) : un **bandeau pleine largeur en haut de toute la
+  page** (l'interface Home Assistant est repoussée vers le bas) ou une petite carte. Si le texte dépasse la fenêtre, il
+  **défile** (désactivable : il passe alors à la ligne, avec un ascenseur s'il est très long). Le même bandeau sert
+  aussi au préavis d'une maintenance à venir.
 - **Réparations** : alerte si une automatisation sélectionnée n'existe plus.
 - L'état et le planning sont conservés après un redémarrage ; ce qui est arrivé à échéance pendant
   l'arrêt est rattrapé au démarrage.
@@ -89,8 +116,12 @@ automation:
   Un blocage serveur de l'API REST n'est pas possible depuis une intégration personnalisée : le serveur HTTP de
   Home Assistant démarre avant elles et n'accepte plus de nouveau middleware. Pour un vrai verrouillage, passe par
   un reverse proxy ou désactive temporairement les comptes concernés.
-- **« Aucun accès » au panneau** retire son entrée du menu latéral côté navigateur (best-effort) ; côté serveur,
-  l'accès est refusé dans tous les cas.
+- **« Aucun accès » au panneau** retire son entrée du menu latéral : masquage de l'élément dans la page **et** ajout
+  de « maintenance » aux panneaux masqués de la barre latérale de l'utilisateur (préférence native de Home Assistant,
+  retirée automatiquement si l'accès est rendu, sauf si l'utilisateur l'avait masqué lui-même). Ça repose sur des
+  éléments internes du frontend (best-effort) ; côté serveur, l'accès est refusé dans tous les cas.
+- Le bandeau pleine largeur repousse l'interface avec un `transform` CSS : si l'affichage est décalé ou cassé
+  chez toi, choisis la petite carte dans les paramètres.
 - L'affichage repose sur des éléments internes du frontend de Home Assistant (`ha-card`, `ha-icon`,
   `hass.auth.revoke()` pour la déconnexion). Ils peuvent évoluer d'une version à l'autre.
 - Panneau et page de blocage : français et anglais ; messages d'erreur du serveur en français.
