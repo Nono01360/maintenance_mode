@@ -590,38 +590,50 @@
   const reducedMotion = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
   // Repousse toute l'interface Home Assistant sous le bandeau.
-  // `home-assistant` est un élément « display: inline » par défaut : un `transform` ou une
-  // `height` n'ont AUCUN effet sur un élément en ligne. On en fait donc une boîte fixe qui occupe
-  // la fenêtre sous le bandeau ; le `transform` en fait aussi le repère des éléments « fixed »
-  // de l'interface (en-tête, menu latéral, boîtes de dialogue). `overflow: hidden` rogne ce qui
-  // dépasse, pour que le document ne devienne jamais défilable.
-  const PUSH_PROPS = ["display", "position", "top", "right", "bottom", "left", "height", "transform", "overflow"];
+  // 1. `home-assistant` est « display: inline » : `transform`/`height` y sont sans effet. On en fait
+  //    une boîte fixe qui occupe la fenêtre sous le bandeau ; le `transform` en fait aussi le repère
+  //    des éléments « fixed » (en-tête, menu latéral, dialogues), qui restent donc en place.
+  // 2. Home Assistant fait défiler le DOCUMENT : dans une boîte fixe, plus rien ne défile. On donne
+  //    donc le défilement à `home-assistant-main` (parent de tout le contenu). Les éléments « fixed »
+  //    ne sont pas concernés : leur repère est la boîte, pas ce conteneur.
+  // Si la structure n'est pas reconnue, on ne touche à rien (le bandeau reste affiché par-dessus).
+  const HA_PROPS = ["display", "position", "top", "right", "bottom", "left", "height", "transform", "overflow"];
+  const MAIN_PROPS = ["display", "height", "min-height", "max-height", "overflow"];
   let pageLock = null;
+  let pushWarned = false;
+
+  const saveStyles = (node, props) => Object.fromEntries(props.map((p) => [p, node.style.getPropertyValue(p)]));
+  const restoreStyles = (node, saved) => {
+    for (const [p, v] of Object.entries(saved)) {
+      if (v) node.style.setProperty(p, v); else node.style.removeProperty(p);
+    }
+  };
 
   const pushPage = (px) => {
     const ha = getHaEl();
     if (!ha) return;
     const root = document.documentElement;
     if (px > 0) {
-      if (!pageLock) {
-        pageLock = {
-          ha: Object.fromEntries(PUSH_PROPS.map((p) => [p, ha.style.getPropertyValue(p)])),
-          root: root.style.overflow,
-        };
+      let main = pageLock?.mainEl;
+      if (!main || !main.isConnected) main = deepFind(ha, "home-assistant-main");
+      if (!main) {
+        if (!pushWarned) { console.warn("maintenance_mode: structure de Home Assistant non reconnue, la page n'est pas décalée (choisis « petite carte » dans les paramètres)"); pushWarned = true; }
+        return;
       }
-      const css = {
-        display: "block", position: "fixed", top: `${px}px`, right: "0", bottom: "0", left: "0",
-        height: "auto", transform: "translateZ(0)", overflow: "hidden",
-      };
+      if (!pageLock) {
+        pageLock = { ha: saveStyles(ha, HA_PROPS), mainEl: main, main: saveStyles(main, MAIN_PROPS), root: root.style.overflow };
+      }
+      const css = { display: "block", position: "fixed", top: `${px}px`, right: "0", bottom: "0", left: "0",
+        height: "auto", transform: "translateZ(0)", overflow: "hidden" };
       for (const [k, v] of Object.entries(css)) ha.style.setProperty(k, v);
+      const mainCss = { display: "block", height: "100%", "min-height": "0", "max-height": "100%", overflow: "auto" };
+      for (const [k, v] of Object.entries(mainCss)) main.style.setProperty(k, v);
       root.style.overflow = "hidden";
       if (window.scrollY || root.scrollTop) window.scrollTo(0, 0);
     } else if (pageLock) {
       // on ne restaure que nos propriétés (Home Assistant en pose d'autres : direction, etc.)
-      for (const p of PUSH_PROPS) {
-        const v = pageLock.ha[p];
-        if (v) ha.style.setProperty(p, v); else ha.style.removeProperty(p);
-      }
+      restoreStyles(ha, pageLock.ha);
+      restoreStyles(pageLock.mainEl, pageLock.main);
       root.style.overflow = pageLock.root;
       pageLock = null;
     }
