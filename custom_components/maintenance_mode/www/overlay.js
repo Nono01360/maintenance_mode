@@ -589,13 +589,50 @@
 
   const reducedMotion = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-  // Repousse toute l'interface Home Assistant sous le bandeau. Un `transform` fait de
-  // l'élément le repère des éléments « fixed » (en-tête, barre latérale, boîtes de dialogue).
+  // Repousse toute l'interface Home Assistant sous le bandeau.
+  // `home-assistant` est un élément « display: inline » par défaut : un `transform` ou une
+  // `height` n'ont AUCUN effet sur un élément en ligne. On en fait donc une boîte fixe qui occupe
+  // la fenêtre sous le bandeau ; le `transform` en fait aussi le repère des éléments « fixed »
+  // de l'interface (en-tête, menu latéral, boîtes de dialogue). `overflow: hidden` rogne ce qui
+  // dépasse, pour que le document ne devienne jamais défilable.
+  const PUSH_PROPS = ["display", "position", "top", "right", "bottom", "left", "height", "transform", "overflow"];
+  let pageLock = null;
+
   const pushPage = (px) => {
     const ha = getHaEl();
     if (!ha) return;
-    ha.style.transform = px > 0 ? `translateY(${px}px)` : "";
-    ha.style.height = px > 0 ? `calc(100% - ${px}px)` : "";
+    const root = document.documentElement;
+    if (px > 0) {
+      if (!pageLock) {
+        pageLock = {
+          ha: Object.fromEntries(PUSH_PROPS.map((p) => [p, ha.style.getPropertyValue(p)])),
+          root: root.style.overflow,
+        };
+      }
+      const css = {
+        display: "block", position: "fixed", top: `${px}px`, right: "0", bottom: "0", left: "0",
+        height: "auto", transform: "translateZ(0)", overflow: "hidden",
+      };
+      for (const [k, v] of Object.entries(css)) ha.style.setProperty(k, v);
+      root.style.overflow = "hidden";
+      if (window.scrollY || root.scrollTop) window.scrollTo(0, 0);
+    } else if (pageLock) {
+      // on ne restaure que nos propriétés (Home Assistant en pose d'autres : direction, etc.)
+      for (const p of PUSH_PROPS) {
+        const v = pageLock.ha[p];
+        if (v) ha.style.setProperty(p, v); else ha.style.removeProperty(p);
+      }
+      root.style.overflow = pageLock.root;
+      pageLock = null;
+    }
+  };
+
+  // Mesure le bandeau et recale la page (appelé à chaque rendu ET quand sa taille change)
+  const syncPush = () => {
+    if (!bar) return;
+    const h = Math.ceil(bar.root.getBoundingClientRect().height);
+    if (h !== bar.pushed) { pushPage(h); bar.pushed = h; }
+    else if (window.scrollY) window.scrollTo(0, 0);   // le document ne doit pas avoir glissé
   };
 
   const barDismissed = (key) => {
@@ -633,6 +670,7 @@
 
   const removeBar = () => {
     if (!bar) return;
+    bar.ro?.disconnect();
     bar.root.remove();
     bar = null;
     pushPage(0);
@@ -651,6 +689,10 @@
         history.pushState(null, "", `/${PANEL_PATH}`);
         window.dispatchEvent(new CustomEvent("location-changed"));
       });
+      if (typeof ResizeObserver !== "undefined") {
+        bar.ro = new ResizeObserver(() => syncPush());   // retour à la ligne, fenêtre redimensionnée…
+        bar.ro.observe(bar.root);
+      }
     }
     bar.key = key;
     const { r } = bar;
@@ -665,8 +707,7 @@
       bar.width = r.viewport.clientWidth;
       bar.scrollOpt = o.scroll;
     }
-    const h = Math.ceil(bar.root.getBoundingClientRect().height);
-    if (h !== bar.pushed) { pushPage(h); bar.pushed = h; }
+    syncPush();
   };
 
   const pagesText = (pages, hass, lang, tx) =>
