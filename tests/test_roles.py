@@ -18,7 +18,9 @@ def _role_id(m, name):
 async def test_builtin_permissions(hass, hass_owner_user, hass_admin_user, hass_read_only_user):
     _, m = await _setup(hass)
     assert m.perms_for(hass_owner_user) >= {"view", "access", "settings"}
-    assert m.perms_for(hass_admin_user) == {"view", "history", "control", "schedule", "templates", "settings", "access"}
+    assert m.perms_for(hass_admin_user) == {
+        "view", "history", "history_delete", "control", "schedule", "templates", "settings", "access",
+    }
     assert m.perms_for(hass_read_only_user) == {"view"}
 
 

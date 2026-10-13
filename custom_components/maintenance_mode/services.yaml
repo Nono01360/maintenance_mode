@@ -60,3 +60,9 @@ cancel_schedule:
       required: true
       selector:
         text:
+
+clear_history:
+  fields:
+    older_than:
+      selector:
+        duration:

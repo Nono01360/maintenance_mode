@@ -30,6 +30,7 @@ SCHEDULE_SCHEMA = vol.Schema(
     }
 )
 CANCEL_SCHEMA = vol.Schema({vol.Required("window_id"): cv.string})
+CLEAR_HISTORY_SCHEMA = vol.Schema({vol.Optional("older_than"): cv.time_period})
 
 
 def _manager(hass: HomeAssistant) -> MaintenanceManager:
@@ -72,7 +73,11 @@ def async_register(hass: HomeAssistant) -> None:
     async def _cancel(call: ServiceCall) -> None:
         await _manager(hass).async_delete_window(call.data["window_id"])
 
+    async def _clear_history(call: ServiceCall) -> None:
+        await _manager(hass).async_clear_history(call.data.get("older_than"))
+
     async_register_admin_service(hass, DOMAIN, "start", _start, START_SCHEMA)
     async_register_admin_service(hass, DOMAIN, "stop", _stop, vol.Schema({}))
     async_register_admin_service(hass, DOMAIN, "schedule", _schedule, SCHEDULE_SCHEMA)
     async_register_admin_service(hass, DOMAIN, "cancel_schedule", _cancel, CANCEL_SCHEMA)
+    async_register_admin_service(hass, DOMAIN, "clear_history", _clear_history, CLEAR_HISTORY_SCHEMA)

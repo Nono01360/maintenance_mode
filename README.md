@@ -29,6 +29,7 @@ Chaque utilisateur a un **rôle** ; chaque rôle est un ensemble d'**autorisatio
 |---|---|
 | `view` | voir l'état et le planning (ajoutée automatiquement dès qu'un rôle a une autre autorisation) |
 | `history` | voir l'historique |
+| `history_delete` | supprimer l'historique, une entrée ou tout (inclut `history`) |
 | `control` | démarrer, modifier et terminer la maintenance en cours |
 | `schedule` | planifier, modifier, dupliquer et supprimer des maintenances |
 | `templates` | créer et supprimer des modèles |
@@ -68,7 +69,9 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
 - **Notifications push** (application mobile…) : avant le début, au début, avant la fin, à la fin. Choisis un service
   précis (`notify.mobile_app_…`) : l'alias générique `notify.notify` n'est pas proposé, car son comportement dépend de
   la plateforme qui l'enregistre (aucun, un seul ou tous les appareils).
-- **Historique** des dernières maintenances (qui, quand, comment elles ont fini), visible par les administrateurs.
+- **Historique** des dernières maintenances (qui, quand, comment elles ont fini). Avec l'autorisation `history_delete`, on peut
+  supprimer une entrée ou **tout effacer** (confirmation en deux clics). Le service `maintenance_mode.clear_history` permet de
+  le faire par automatisation, éventuellement seulement pour les maintenances plus anciennes qu'une durée donnée.
 - **Bandeau** « Mode maintenance actif » pour les utilisateurs non bloqués, avec lien vers le panneau. Deux
   affichages au choix (Paramètres → Notification dans l'interface) : un **bandeau pleine largeur en haut de toute la
   page** (l'interface Home Assistant est repoussée vers le bas) ou une petite carte. Si le texte dépasse la fenêtre, il
@@ -93,6 +96,7 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
 | `maintenance_mode.stop` | termine la maintenance en cours |
 | `maintenance_mode.schedule` | planifie (`start`, `duration` ou `end`, `repeat`: `none`/`daily`/`weekly`/`monthly`, …) |
 | `maintenance_mode.cancel_schedule` | supprime une maintenance planifiée (`window_id`) |
+| `maintenance_mode.clear_history` | efface l'historique ; `older_than` (durée) limite aux entrées plus anciennes |
 
 ## Évènements
 

@@ -53,6 +53,8 @@ const T = {
     h_title: "Historique", h_empty: "Aucune maintenance passée.", h_by: "par {who}",
     e_manual: "arrêtée à la main", e_auto: "terminée automatiquement", e_replaced: "remplacée par une autre",
     perm_view: "Voir les maintenances", perm_history: "Voir l'historique",
+    perm_history_delete: "Supprimer l'historique (une entrée ou tout)",
+    h_clear: "Tout effacer", h_clear_confirm: "Confirmer l'effacement ?",
     perm_control: "Démarrer, modifier et terminer la maintenance en cours",
     perm_schedule: "Planifier, modifier, dupliquer et supprimer des maintenances",
     perm_templates: "Gérer les modèles", perm_settings: "Modifier les paramètres (message, automatisations, notifications…)",
@@ -112,6 +114,8 @@ const T = {
     h_title: "History", h_empty: "No past maintenance.", h_by: "by {who}",
     e_manual: "stopped manually", e_auto: "ended automatically", e_replaced: "replaced by another",
     perm_view: "View maintenance", perm_history: "View history",
+    perm_history_delete: "Delete history (one entry or everything)",
+    h_clear: "Clear all", h_clear_confirm: "Confirm clearing?",
     perm_control: "Start, edit and end the current maintenance",
     perm_schedule: "Schedule, edit, duplicate and delete maintenance",
     perm_templates: "Manage templates", perm_settings: "Change settings (message, automations, notifications…)",
@@ -150,7 +154,7 @@ const EXTRA_PAGES = {
 };
 
 const NOTIFY_KINDS = ["pre", "started", "end_soon", "ended"];
-const PERMS_ALL = ["view", "history", "control", "schedule", "templates", "settings", "access"];
+const PERMS_ALL = ["view", "history", "history_delete", "control", "schedule", "templates", "settings", "access"];
 
 const STYLES = `
   :host { display: block; height: 100%; background: var(--primary-background-color);
@@ -559,19 +563,26 @@ class MaintenanceModePanel extends HTMLElement {
     return html;
   }
 
-_historyHtml() {
+  _historyHtml() {
     const hist = this._data.history || [];
+    const canDelete = this._can("history_delete");
     const ended = { manual: "e_manual", auto: "e_auto", replaced: "e_replaced" };
-    return `<ha-card class="card"><h2>${this._t("h_title")}</h2>
+    const clearText = this._confirm === "hist:all" ? this._t("h_clear_confirm") : this._t("h_clear");
+    return `<ha-card class="card">
+      <div class="row"><div class="grow"><h2>${this._t("h_title")}</h2></div>
+        ${canDelete && hist.length ? `<button class="btn sm danger" data-action="clear-history">${clearText}</button>` : ""}</div>
       ${hist.length ? hist.map((h) => {
         const byText = h.started_by ? ` · ${this._t("h_by", { who: h.started_by })}` : "";
         const endStatus = this._t(ended[h.ended_by] || "e_auto");
+        const delText = this._confirm === "hist:" + h.hid ? this._t("confirm_delete") : this._t("delete");
         return `<div class="item">
           <div class="badge"><ha-icon icon="mdi:history"></ha-icon></div>
-          <div class="grow"><h3>${this._fmt(h.start)} →${this._fmt(h.ended_at)}</h3>
+          <div class="grow"><h3>${this._fmt(h.start)} → ${this._fmt(h.ended_at)}</h3>
             <div class="muted">${endStatus}${byText}</div>${h.reason ? `<div style="margin-top:4px">${esc(h.reason)}</div>` : ""}
             ${this._chips(h)}
-          </div></div>`;
+          </div>
+          ${canDelete && h.hid ? `<button class="btn sm danger" data-action="delete-history" data-hid="${esc(h.hid)}">${delText}</button>` : ""}
+        </div>`;
       }).join("")
       : `<div class="empty"><ha-icon icon="mdi:history"></ha-icon>${this._t("h_empty")}</div>`}
     </ha-card>`;
@@ -762,8 +773,9 @@ _historyHtml() {
           </div>
           <div class="col" style="gap:0;width:100%">
             ${PERMS_ALL.map((p) => {
-              const checked = r.permissions.includes(p) || (p === "view" && hasOther);
-              const locked = (p === "view" && hasOther) || (!own.has(p) && !checked);
+              const implied = (p === "view" && hasOther) || (p === "history" && r.permissions.includes("history_delete"));
+              const checked = r.permissions.includes(p) || implied;
+              const locked = implied || (!own.has(p) && !checked);
               return `<label class="check"><input type="checkbox" data-action="toggle-role-perm" data-idx="${i}" data-perm="${p}"
                 ${checked ? "checked" : ""} ${locked ? "disabled" : ""}><span>${this._t("perm_" + p)}</span></label>`;
             }).join("")}
@@ -910,7 +922,7 @@ _historyHtml() {
   }
 
 async _act(action, target) {
-    const keepConfirm = ["stop-current", "delete-item", "delete-template", "delete-role"];
+    const keepConfirm = ["stop-current", "delete-item", "delete-template", "delete-role", "delete-history", "clear-history"];
     if (!keepConfirm.includes(action)) this._confirm = null;
 
     if (action === "tab") {
@@ -938,6 +950,23 @@ async _act(action, target) {
     } else if (action === "duplicate-item") {
       const item = this._data.upcoming.find((x) => x.id === target.dataset.id);
       if (item) this._openForm("add", item, true);
+    } else if (action === "delete-history") {
+      const key = "hist:" + target.dataset.hid;
+      if (this._confirm === key) {
+        this._confirm = null;
+        await this._call("delete_history", { history_id: target.dataset.hid });   // (« id » est réservé)
+      } else {
+        this._confirm = key;
+        this._render(true);
+      }
+    } else if (action === "clear-history") {
+      if (this._confirm === "hist:all") {
+        this._confirm = null;
+        await this._call("clear_history");
+      } else {
+        this._confirm = "hist:all";
+        this._render(true);
+      }
     } else if (action === "delete-item") {
       const id = target.dataset.id;
       if (this._confirm === id) {

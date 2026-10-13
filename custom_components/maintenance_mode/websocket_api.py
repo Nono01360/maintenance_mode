@@ -168,6 +168,25 @@ async def ws_delete_window(hass, connection, msg, manager) -> dict[str, Any]:
     return manager.state_for(connection.user)
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "maintenance_mode/delete_history",
+        vol.Required("history_id"): cv.string,  # (« id » est réservé au numéro de message)
+    }
+)
+@_command("history_delete")
+async def ws_delete_history(hass, connection, msg, manager) -> dict[str, Any]:
+    await manager.async_delete_history(msg["history_id"])
+    return manager.state_for(connection.user)
+
+
+@websocket_api.websocket_command({vol.Required("type"): "maintenance_mode/clear_history"})
+@_command("history_delete")
+async def ws_clear_history(hass, connection, msg, manager) -> dict[str, Any]:
+    await manager.async_clear_history()
+    return manager.state_for(connection.user)
+
+
 _TEMPLATE = vol.Schema(
     {
         vol.Optional("id"): cv.string,
@@ -240,6 +259,8 @@ COMMANDS = (
     ws_add_window,
     ws_update_window,
     ws_delete_window,
+    ws_delete_history,
+    ws_clear_history,
     ws_update_config,
 )
 

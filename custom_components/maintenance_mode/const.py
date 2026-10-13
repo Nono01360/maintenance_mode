@@ -24,7 +24,9 @@ ROLE_ADMIN = "admin"    # configure tout (vue administrateur)
 ROLES = (ROLE_NONE, ROLE_VIEWER, ROLE_ADMIN)
 
 # Autorisations (« view » est implicite dès qu'un rôle en possède une autre)
-PERMISSIONS = ("view", "history", "control", "schedule", "templates", "settings", "access")
+PERMISSIONS = (
+    "view", "history", "history_delete", "control", "schedule", "templates", "settings", "access",
+)
 BUILTIN_ROLE_PERMISSIONS = {
     ROLE_NONE: (),
     ROLE_VIEWER: ("view",),

@@ -259,6 +259,8 @@ class MaintenanceManager:
         ]
         self.disabled = list(data.get("disabled", []))
         self.history = list(data.get("history", []))[-MAX_HISTORY:]
+        for entry in self.history:
+            entry.setdefault("hid", uuid.uuid4().hex[:8])  # entrées créées avant la v0.6
         self.notified = list(data.get("notified", []))[-200:]
 
         if data.get("current"):
@@ -324,6 +326,8 @@ class MaintenanceManager:
         wanted = {p for p in perms if p in PERMISSIONS}
         if wanted:
             wanted.add("view")  # sans « view » les autres droits seraient inutilisables
+        if "history_delete" in wanted:
+            wanted.add("history")  # on ne supprime pas ce qu'on ne peut pas voir
         return [p for p in PERMISSIONS if p in wanted]
 
     def role_perms(self, role_id: str, roles: list[dict[str, Any]] | None = None) -> set[str]:
@@ -499,6 +503,32 @@ class MaintenanceManager:
         async with self._lock:
             self.schedule.remove(self._find(window_id))
             await self._commit()
+
+    async def async_delete_history(self, history_id: str) -> None:
+        """Supprime une entrée de l'historique."""
+        async with self._lock:
+            kept = [h for h in self.history if h.get("hid") != history_id]
+            if len(kept) == len(self.history):
+                raise ServiceValidationError("Entrée d'historique introuvable.")
+            self.history = kept
+            await self._commit()
+
+    async def async_clear_history(self, older_than: timedelta | None = None) -> int:
+        """Efface tout l'historique, ou seulement les entrées terminées depuis plus de `older_than`."""
+        async with self._lock:
+            before = len(self.history)
+            if older_than is None:
+                self.history = []
+            else:
+                limit = dt_util.utcnow() - older_than
+                self.history = [
+                    h for h in self.history
+                    if (ended := _parse(h.get("ended_at"))) is None or ended >= limit
+                ]
+            removed = before - len(self.history)
+            if removed:
+                await self._commit()
+            return removed
 
     async def async_update_config(
         self, changes: dict[str, Any], actor_perms: set[str] | None = None
@@ -692,7 +722,9 @@ class MaintenanceManager:
         self.current = None
         if window:
             now = dt_util.utcnow()
-            self.history.append({**window.as_dict(), "ended_at": iso(now), "ended_by": ended_by})
+            self.history.append(
+                {**window.as_dict(), "hid": uuid.uuid4().hex[:8], "ended_at": iso(now), "ended_by": ended_by}
+            )
             self.history = self.history[-MAX_HISTORY:]
             self.hass.bus.async_fire(EVENT_ENDED, {**window.as_dict(), "ended_by": ended_by})
             if ended_by != "replaced":

@@ -100,6 +100,16 @@
           "description": "Maintenance identifier (calendar / panel attribute)."
         }
       }
+    },
+    "clear_history": {
+      "name": "Clear history",
+      "description": "Clears the whole maintenance history, or only the oldest entries.",
+      "fields": {
+        "older_than": {
+          "name": "Older than",
+          "description": "Only delete maintenance that ended longer ago than this duration (empty = delete everything)."
+        }
+      }
     }
   }
 }
