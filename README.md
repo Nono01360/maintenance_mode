@@ -78,6 +78,13 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
   **défile** (désactivable : il passe alors à la ligne, avec un ascenseur s'il est très long). Le même bandeau sert
   aussi au préavis d'une maintenance à venir.
 - **Réparations** : alerte si une automatisation sélectionnée n'existe plus.
+- **Suspension réappliquée** : si Home Assistant redémarre (mise à jour, arrêt brutal) ou si tu recharges les
+  automatisations pendant une maintenance, celles qui avaient été suspendues et qui seraient redevenues actives (par
+  exemple une automatisation avec `initial_state: true`) sont remises en pause. On ne réapplique que la liste
+  suspendue au démarrage de la maintenance : une automatisation créée pendant la maintenance n'est pas suspendue.
+- **Confidentialité** : le nom de la personne qui a lancé une maintenance n'apparaît ni dans les attributs des
+  entités (lisibles par tous) ni dans le panneau pour un simple lecteur ; il reste dans l'historique (autorisation
+  `history`) et dans les évènements du bus (réservés aux administrateurs).
 - L'état et le planning sont conservés après un redémarrage ; ce qui est arrivé à échéance pendant
   l'arrêt est rattrapé au démarrage.
 

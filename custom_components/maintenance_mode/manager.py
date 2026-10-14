@@ -11,6 +11,7 @@ from typing import Any, Iterator
 
 from dateutil.relativedelta import relativedelta
 
+from homeassistant.components.automation import EVENT_AUTOMATION_RELOADED
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import STATE_ON
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
@@ -122,8 +123,10 @@ class Window:
     repeat: str = "none"
     started_by: str = ""
 
-    def as_dict(self) -> dict[str, Any]:
-        return {
+    def as_dict(self, *, public: bool = False) -> dict[str, Any]:
+        """`public=True` : version sans l'initiateur, pour tout ce qui est lisible par les
+        utilisateurs (attributs d'entités, panneau sans l'autorisation `history`)."""
+        data = {
             "id": self.id,
             "start": iso(self.start),
             "end": iso(self.end),
@@ -131,8 +134,10 @@ class Window:
             "pages": list(self.pages),
             "pause_automations": self.pause_automations,
             "repeat": self.repeat,
-            "started_by": self.started_by,
         }
+        if not public:
+            data["started_by"] = self.started_by
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Window | None:
@@ -235,6 +240,7 @@ class MaintenanceManager:
         self._store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         self._listeners: list[CALLBACK_TYPE] = []
         self._timer: CALLBACK_TYPE | None = None
+        self._unsub_reload: CALLBACK_TYPE | None = None
         self._lock = asyncio.Lock()
         self._unloaded = False
 
@@ -279,6 +285,10 @@ class MaintenanceManager:
         self.schedule.sort(key=lambda w: w.start)
 
         await self._refresh_users()
+        # Un rechargement des automatisations (`automation.reload`) peut en rallumer certaines
+        self._unsub_reload = self.hass.bus.async_listen(
+            EVENT_AUTOMATION_RELOADED, self._async_on_automation_reload
+        )
         async_at_started(self.hass, self._async_resume)
 
     @callback
@@ -286,6 +296,9 @@ class MaintenanceManager:
         self._unloaded = True
         self._cancel_timer()
         self._listeners.clear()
+        if self._unsub_reload:
+            self._unsub_reload()
+            self._unsub_reload = None
         ir.async_delete_issue(self.hass, DOMAIN, "missing_automations")
 
     @callback
@@ -375,8 +388,8 @@ class MaintenanceManager:
             "permissions": [p for p in PERMISSIONS if p in perms],
             "now": iso(dt_util.utcnow()),
             "active": self.current is not None,
-            "current": self.current.as_dict() if self.current else None,
-            "upcoming": [w.as_dict() for w in self.schedule],
+            "current": self.current.as_dict(public=True) if self.current else None,
+            "upcoming": [w.as_dict(public=True) for w in self.schedule],
             "message": self.config["message"],
         }
         cfg: dict[str, Any] = {}
@@ -789,11 +802,42 @@ class MaintenanceManager:
             window.started_by = window.started_by or "planification"
             await self._activate(window)
 
+    async def _reapply_suspension(self) -> None:
+        """Remet en pause les automatisations de l'instantané redevenues actives.
+
+        Cas réels : redémarrage de HA (`initial_state: true` écrase l'état restauré ; après un
+        arrêt brutal l'état est celui de la dernière sauvegarde) ou rechargement des automatisations
+        modifiées. On ne touche qu'à l'instantané : une automatisation créée pendant la maintenance
+        n'est pas suspendue, et si aucune maintenance ne suspend rien, on ne fait rien.
+        """
+        if not self.current or not self.disabled:
+            return
+        again = [
+            e for e in self.disabled
+            if (state := self.hass.states.get(e)) and state.state == STATE_ON
+        ]
+        if not again:
+            return
+        _LOGGER.info("Maintenance en cours : %d automatisation(s) remises en pause", len(again))
+        try:
+            await self.hass.services.async_call(
+                "automation", "turn_off", {"entity_id": again, "stop_actions": True}, blocking=True
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Impossible de remettre les automatisations en pause")
+
+    async def _async_on_automation_reload(self, _event: Any) -> None:
+        if self._unloaded or not self.current or not self.disabled:
+            return
+        async with self._lock:
+            await self._reapply_suspension()
+
     async def _async_resume(self, _hass: HomeAssistant | None = None) -> None:
         if self._unloaded:
             return
         async with self._lock:
             await self._process_due()
+            await self._reapply_suspension()   # HA vient de (re)démarrer
             await self._commit()
 
     async def _async_timer_cb(self, _now: datetime) -> None:
