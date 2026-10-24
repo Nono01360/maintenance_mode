@@ -18,6 +18,7 @@ from homeassistant.const import STATE_ON
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
@@ -48,6 +49,7 @@ from .const import (
     REPEATS,
     ROLE_ADMIN,
     ROLE_VIEWER,
+    SIGNAL_STATE_UPDATED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -936,3 +938,4 @@ class MaintenanceManager:
         )
         for update in list(self._listeners):
             update()
+        async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATED)   # panneaux ouverts (toutes instances)

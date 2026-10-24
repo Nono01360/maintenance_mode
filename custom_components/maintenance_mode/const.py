@@ -38,6 +38,10 @@ MAX_ROLE_NAME = 30
 # Affichage de la notification dans l'interface
 BANNER_MODES = ("bar", "card")
 
+# Signal « l'état a changé » : propre à l'intégration, il survit au rechargement (contrairement
+# aux écouteurs attachés à une instance du gestionnaire).
+SIGNAL_STATE_UPDATED = f"{DOMAIN}_state_updated"
+
 DEFAULT_WARN_MINUTES = 15
 DEFAULT_MESSAGE = "Home Assistant est temporairement indisponible pour cause de maintenance."
 

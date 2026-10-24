@@ -9,8 +9,9 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, Unauthorized
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .const import BANNER_MODES, NOTIFY_KINDS, PERMISSIONS, REPEATS
+from .const import BANNER_MODES, NOTIFY_KINDS, PERMISSIONS, REPEATS, SIGNAL_STATE_UPDATED
 from .manager import get_manager
 
 DATETIME = vol.Any(None, cv.datetime)
@@ -56,11 +57,15 @@ async def ws_get_state(hass, connection, msg, manager) -> dict[str, Any]:
 async def ws_subscribe(hass, connection, msg, manager) -> None:
     @callback
     def _forward() -> None:
-        connection.send_message(
-            websocket_api.event_message(msg["id"], manager.state_for(connection.user))
-        )
+        # On relit le gestionnaire COURANT à chaque envoi : après un rechargement de l'intégration,
+        # l'abonnement du panneau (inchangé côté navigateur) suit le nouveau gestionnaire.
+        current = get_manager(hass)
+        if current is not None:
+            connection.send_message(
+                websocket_api.event_message(msg["id"], current.state_for(connection.user))
+            )
 
-    connection.subscriptions[msg["id"]] = manager.async_add_listener(_forward)
+    connection.subscriptions[msg["id"]] = async_dispatcher_connect(hass, SIGNAL_STATE_UPDATED, _forward)
     _forward()
     return None
 
