@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import calendar
 import logging
 import re
 import uuid
@@ -102,12 +103,31 @@ def _overlap(a_start, a_end, b_start, b_end) -> bool:
     return a_start < (b_end or _FAR) and b_start < (a_end or _FAR)
 
 
-def _shift(start: datetime, end: datetime | None, repeat: str):
-    """Décale d'une période en heure locale (l'heure « murale » est conservée malgré le DST)."""
-    step = _STEPS[repeat]
-    new_start = dt_util.as_utc(dt_util.as_local(start) + step)
-    new_end = dt_util.as_utc(dt_util.as_local(end) + step) if end else None
-    return new_start, new_end
+def _add_month(local: datetime, anchor_day: int) -> datetime:
+    """Mois suivant, au jour d'origine (`anchor_day`) ou au dernier jour du mois s'il est plus court."""
+    year = local.year + local.month // 12
+    month = local.month % 12 + 1
+    last = calendar.monthrange(year, month)[1]
+    return local.replace(year=year, month=month, day=min(anchor_day, last))
+
+
+def _shift(start: datetime, end: datetime | None, repeat: str, anchor_day: int | None = None):
+    """Décale d'une période en heure locale (l'heure « murale » est conservée malgré le DST).
+
+    Mensuel : le jour d'origine est mémorisé (`anchor_day`), sinon 31 janvier → 28 février →
+    28 mars… dériverait vers le bas à chaque mois court.
+    """
+    local_start = dt_util.as_local(start)
+    if repeat == "monthly":
+        new_start = _add_month(local_start, anchor_day or local_start.day)
+    else:
+        new_start = local_start + _STEPS[repeat]
+    new_end = None
+    if end:
+        # la durée « murale » est conservée : même heure de fin locale, quel que soit le DST
+        wall = dt_util.as_local(end).replace(tzinfo=None) - local_start.replace(tzinfo=None)
+        new_end = (new_start.replace(tzinfo=None) + wall).replace(tzinfo=new_start.tzinfo)
+    return dt_util.as_utc(new_start), (dt_util.as_utc(new_end) if new_end else None)
 
 
 @dataclass
@@ -122,6 +142,7 @@ class Window:
     pause_automations: bool = True
     repeat: str = "none"
     started_by: str = ""
+    anchor_day: int | None = None  # jour du mois d'origine (répétition mensuelle)
 
     def as_dict(self, *, public: bool = False) -> dict[str, Any]:
         """`public=True` : version sans l'initiateur, pour tout ce qui est lisible par les
@@ -134,6 +155,7 @@ class Window:
             "pages": list(self.pages),
             "pause_automations": self.pause_automations,
             "repeat": self.repeat,
+            "anchor_day": self.anchor_day,
         }
         if not public:
             data["started_by"] = self.started_by
@@ -154,12 +176,13 @@ class Window:
             pause_automations=bool(data.get("pause_automations", True)),
             repeat=repeat if repeat in REPEATS else "none",
             started_by=str(data.get("started_by", "")),
+            anchor_day=data.get("anchor_day"),
         )
 
     def next_occurrence(self, now: datetime) -> Window:
         start, end = self.start, self.end
         for _ in range(10000):
-            start, end = _shift(start, end, self.repeat)
+            start, end = _shift(start, end, self.repeat, self.anchor_day)
             if start > now:
                 break
         return replace(self, id=uuid.uuid4().hex[:8], start=start, end=end, started_by="")
@@ -173,7 +196,7 @@ class Window:
             yield start, end
             if self.repeat == "none":
                 return
-            start, end = _shift(start, end, self.repeat)
+            start, end = _shift(start, end, self.repeat, self.anchor_day)
 
 
 def _default_config() -> dict[str, Any]:
@@ -484,6 +507,7 @@ class MaintenanceManager:
                 pages=_clean_pages(pages),
                 pause_automations=pause,
                 repeat=self._check_repeat(repeat, start, end),
+                anchor_day=dt_util.as_local(start).day,
             )
             self.schedule.append(window)
             self.schedule.sort(key=lambda w: w.start)
@@ -509,6 +533,7 @@ class MaintenanceManager:
             window.pages = _clean_pages(pages)
             window.pause_automations = pause
             window.repeat = self._check_repeat(repeat, start, end)
+            window.anchor_day = dt_util.as_local(start).day
             self.schedule.sort(key=lambda w: w.start)
             await self._commit()
 
