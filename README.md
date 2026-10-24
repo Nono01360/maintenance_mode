@@ -149,6 +149,12 @@ Pense à remplacer `VOTRE_PSEUDO` dans `manifest.json` par ton nom d'utilisateur
 ## Développement
 
 ```bash
+# Python (banc de test de Home Assistant)
 pip install -r requirements_test.txt
+pip install $(python -c "import json,pathlib,homeassistant as h;print(' '.join(json.loads((pathlib.Path(h.__file__).parent/'components'/'frontend'/'manifest.json').read_text())['requirements']))")
 pytest tests -q
+
+# JavaScript (panneau et bandeau, simulés avec jsdom)
+npm ci
+npm test
 ```

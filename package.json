@@ -1,0 +1,14 @@
+{
+  "name": "maintenance-mode-frontend-tests",
+  "private": true,
+  "description": "Tests JavaScript (jsdom) du panneau et du bandeau de l'intégration Mode maintenance",
+  "scripts": {
+    "test": "node tests_js/run.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.2"
+  }
+}
