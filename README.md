@@ -146,6 +146,29 @@ automation:
 
 Pense à remplacer `VOTRE_PSEUDO` dans `manifest.json` par ton nom d'utilisateur GitHub.
 
+## Dépannage
+
+| Symptôme | Cause probable et solution |
+|---|---|
+| Le panneau « Maintenance » n'apparaît pas | Redémarre Home Assistant après une mise à jour, puis recharge la page avec `Ctrl+Maj+R` (dans l'application mobile : *Paramètres de l'application → Débogage → Réinitialiser le cache du frontend*). Si ton rôle est « Aucun accès », il est volontairement masqué. |
+| Le bandeau est décalé ou cache le haut de la page | Passe en « petite carte » (*Paramètres → Notification dans l'interface*). Le bandeau repousse l'interface par une technique CSS qui dépend de la structure de Home Assistant ; en cas de structure inconnue, le code ne touche à rien et écrit un avertissement dans la console (F12). |
+| L'entrée du menu reste visible malgré « Aucun accès » | Le masquage repose sur la structure interne du menu : recharge la page, puis regarde la console (F12). Le panneau reste de toute façon inaccessible côté serveur. |
+| Une automatisation est active pendant une maintenance | Elle n'était peut-être pas dans la sélection, ou a été créée après le démarrage de la maintenance (l'instantané est pris au démarrage). Après un redémarrage ou un rechargement, les automatisations suspendues sont remises en pause. |
+| Les dates sont décalées | Le formulaire suit le fuseau de ton profil (*Profil → Fuseau horaire*) : navigateur ou serveur. Le fuseau utilisé est affiché sous les champs. |
+| Pas de notification push | Vérifie que le service existe dans *Outils de développement → Actions* (`notify.mobile_app_…`). L'alias générique `notify.notify` n'est pas proposé. Les moments activés sont réglables dans l'onglet Paramètres. |
+| Une maintenance répétée « saute » un mois | Elle retombe sur le dernier jour d'un mois plus court (31 → 28 février) puis retrouve le jour d'origine. |
+| Après suppression de l'intégration, des automatisations sont encore coupées | La suppression réactive celles que la maintenance avait suspendues ; celles que tu avais coupées toi-même restent coupées. |
+
+**Journaux détaillés** : dans `configuration.yaml`
+
+```yaml
+logger:
+  logs:
+    custom_components.maintenance_mode: debug
+```
+
+**Diagnostics** : *Paramètres → Appareils et services → Mode maintenance → ⋮ → Télécharger les diagnostics* (identifiants, services de notification et messages masqués), à joindre à un ticket.
+
 ## Développement
 
 ```bash

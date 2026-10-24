@@ -1,0 +1,60 @@
+name: Signaler un bug
+description: Quelque chose ne fonctionne pas comme prévu
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci ! Plus le ticket est précis, plus vite on trouve. Regarde d'abord la section **Dépannage** du README.
+  - type: input
+    id: integration_version
+    attributes:
+      label: Version de l'intégration
+      placeholder: "0.6.9"
+    validations:
+      required: true
+  - type: input
+    id: ha_version
+    attributes:
+      label: Version de Home Assistant
+      placeholder: "2026.2.3"
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: Où le problème apparaît-il ?
+      options:
+        - Navigateur sur ordinateur
+        - Navigateur sur téléphone ou tablette
+        - Application mobile Home Assistant
+        - Côté serveur (journaux, automatisations, notifications)
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: Ce qui se passe, et ce que tu attendais
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Comment le reproduire
+      placeholder: "1. …\n2. …"
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: |
+        *Paramètres → Appareils et services → Mode maintenance → ⋮ → Télécharger les diagnostics*, puis colle le contenu
+        (les identifiants d'utilisateurs, noms de services de notification et messages y sont masqués).
+      render: json
+  - type: textarea
+    id: console
+    attributes:
+      label: Console du navigateur ou journaux
+      description: |
+        Problème d'affichage : touche F12 → onglet Console, copie les lignes qui commencent par « maintenance_mode ».
+        Problème serveur : copie les lignes du journal contenant `maintenance_mode`.
+      render: text
