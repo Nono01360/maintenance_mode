@@ -244,11 +244,18 @@
   };
   const parseWin = (w) => (w ? { ...w, start: parseDate(w.start), end: parseDate(w.end) } : null);
 
+  // Fuseau d'affichage : comme le reste de l'interface, celui du serveur si le profil de l'utilisateur
+  // le demande (`hass.locale.time_zone === "server"`), sinon celui du navigateur.
+  let activeTz;
+  const tzOf = (hass) =>
+    hass.locale?.time_zone === "server" && hass.config?.time_zone ? hass.config.time_zone : undefined;
+
   const fmt = (d, lang) => {
-    const sameDay = d.toDateString() === new Date().toDateString();
+    const day = (x) => new Intl.DateTimeFormat("en-CA", { timeZone: activeTz }).format(x);
+    const sameDay = day(d) === day(new Date());
     return new Intl.DateTimeFormat(
       lang,
-      sameDay ? { timeStyle: "short" } : { dateStyle: "medium", timeStyle: "short" }
+      sameDay ? { timeStyle: "short", timeZone: activeTz } : { dateStyle: "medium", timeStyle: "short", timeZone: activeTz }
     ).format(d);
   };
 
@@ -752,6 +759,7 @@
   const check = () => {
     const hass = getHass();
     if (!hass?.user) return;
+    activeTz = tzOf(hass);
     const st = findState(hass);
     if (!st) {
       setPanelHidden(false); syncSidebarPref(hass, false);

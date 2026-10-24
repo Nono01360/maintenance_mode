@@ -7,6 +7,43 @@ const esc = (v) =>
   String(v ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+// ---------- fuseau horaire ----------
+// Home Assistant affiche les dates dans le fuseau du navigateur ou dans celui du serveur, selon le profil
+// de l'utilisateur (`hass.locale.time_zone` : "local" | "server"). Le formulaire doit faire pareil.
+const tzParts = (date, tz) => {
+  const f = new Intl.DateTimeFormat("en-CA", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit",
+    day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const p = Object.fromEntries(f.formatToParts(date).map((x) => [x.type, x.value]));
+  return { y: +p.year, mo: +p.month, d: +p.day, h: +p.hour, mi: +p.minute, s: +p.second };
+};
+const tzOffsetMs = (utcMs, tz) => {
+  const p = tzParts(new Date(utcMs), tz);
+  return Date.UTC(p.y, p.mo - 1, p.d, p.h, p.mi, p.s) - Math.floor(utcMs / 1000) * 1000;
+};
+const pad2 = (n) => String(n).padStart(2, "0");
+// instant -> "YYYY-MM-DDTHH:mm" dans le fuseau `tz` (navigateur si tz est vide)
+const zonedLocal = (date, tz) => {
+  if (!tz) {
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  }
+  const p = tzParts(date, tz);
+  return `${p.y}-${pad2(p.mo)}-${pad2(p.d)}T${pad2(p.h)}:${pad2(p.mi)}`;
+};
+// "YYYY-MM-DDTHH:mm" lu dans le fuseau `tz` -> instant (Date)
+// Heure ambiguë (retour à l'heure d'hiver) : la première occurrence, comme les navigateurs.
+// Heure inexistante (passage à l'heure d'été) : décalée d'une heure vers l'avant.
+const zonedToDate = (local, tz) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(local || "");
+  if (!m) return null;
+  if (!tz) return new Date(local);
+  const naive = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+  const before = tzOffsetMs(naive - 864e5, tz);
+  const after = tzOffsetMs(naive + 864e5, tz);
+  const want = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}`;
+  const matches = [...new Set([naive - before, naive - after])].filter((t) => zonedLocal(new Date(t), tz) === want);
+  return new Date(matches.length ? Math.min(...matches) : naive - before);
+};
+
 const T = {
   fr: {
     title: "Maintenance", tab_list: "Maintenances", tab_settings: "Paramètres", tab_access: "Accès",
@@ -23,6 +60,7 @@ const T = {
     all_ha: "Tout Home Assistant", main_dashboard: "Tableau de bord principal",
     form_add: "Planifier une maintenance", form_edit: "Modifier la maintenance",
     form_now: "Démarrer une maintenance maintenant", form_current: "Modifier la maintenance en cours",
+    tz_note: "Dates et heures en fuseau {tz}",
     tpl_apply: "Appliquer un modèle", tpl_choose: "— choisir —", start: "Début", end_opt: "Fin prévue (facultatif)",
     reason_opt: "Motif (facultatif)", scope: "Portée", scope_pages: "Certaines pages seulement",
     custom_ph: "Autre chemin, ex. config/helpers", add: "Ajouter", remove: "Retirer",
@@ -84,6 +122,7 @@ const T = {
     all_ha: "All of Home Assistant", main_dashboard: "Main dashboard",
     form_add: "Schedule a maintenance", form_edit: "Edit maintenance",
     form_now: "Start a maintenance now", form_current: "Edit current maintenance",
+    tz_note: "Dates and times in time zone {tz}",
     tpl_apply: "Apply a template", tpl_choose: "— choose —", start: "Start", end_opt: "Expected end (optional)",
     reason_opt: "Reason (optional)", scope: "Scope", scope_pages: "Some pages only",
     custom_ph: "Other path, e.g. config/helpers", add: "Add", remove: "Remove",
@@ -347,7 +386,8 @@ class MaintenanceModePanel extends HTMLElement {
   // ---------- utilitaires d'affichage ----------
   _fmt(iso) {
     if (!iso) return "";
-    return new Intl.DateTimeFormat(this._lang(), { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
+    return new Intl.DateTimeFormat(this._lang(), { dateStyle: "medium", timeStyle: "short", timeZone: this._tz() })
+      .format(new Date(iso));
   }
 
   _rel(iso) {
@@ -625,6 +665,7 @@ class MaintenanceModePanel extends HTMLElement {
         ${showStart ? `<label class="field">${this._t("start")}<input type="datetime-local" data-field="form.start" value="${esc(f.start)}"></label>` : ""}
         <label class="field">${this._t("end_opt")}<input type="datetime-local" data-field="form.end" value="${esc(f.end)}"></label>
       </div>
+      <div class="muted">${this._t("tz_note", { tz: this._tzLabel() })}</div>
       <label class="field">${this._t("reason_opt")}<input type="text" maxlength="200" data-field="form.reason" value="${esc(f.reason)}"></label>
       <div class="col" style="gap:8px"><span class="muted">${this._t("scope")}</span>
         <div class="radio">
@@ -856,17 +897,25 @@ class MaintenanceModePanel extends HTMLElement {
     if (i >= 0) list.splice(i, 1); else list.push(value);
   }
 
+  // Fuseau d'affichage : celui du serveur si le profil l'indique, sinon celui du navigateur (undefined)
+  _tz() {
+    const h = this._hass;
+    return h?.locale?.time_zone === "server" && h?.config?.time_zone ? h.config.time_zone : undefined;
+  }
+
+  _tzLabel() { return this._tz() || Intl.DateTimeFormat().resolvedOptions().timeZone; }
+
+  _toDate(local) { return zonedToDate(local, this._tz()); }
+
   _defaultStart() {
     const d = new Date(Date.now() + 60 * 60000);
-    d.setMinutes(0, 0, 0);
-    return d;
+    const local = zonedLocal(d, this._tz());                      // l'heure ronde se calcule dans le fuseau affiché
+    return zonedToDate(`${local.slice(0, 13)}:00`, this._tz()) || d;
   }
 
   _local(d) {
     if (!d) return "";
-    const x = d instanceof Date ? d : new Date(d);
-    const p = (n) => String(n).padStart(2, "0");
-    return `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())}T${p(x.getHours())}:${p(x.getMinutes())}`;
+    return zonedLocal(d instanceof Date ? d : new Date(d), this._tz());
   }
 
   _openForm(mode, w, dup = false) {
@@ -900,7 +949,7 @@ class MaintenanceModePanel extends HTMLElement {
     f.pause = t.pause_automations !== false;
     f.repeat = t.repeat || "none";
     if (t.duration) {
-      const base = f.start ? new Date(f.start) : new Date();
+      const base = (f.start && this._toDate(f.start)) || new Date();
       f.end = this._local(new Date(base.getTime() + t.duration * 60000));
     }
     this._render(true);
@@ -912,7 +961,7 @@ class MaintenanceModePanel extends HTMLElement {
     if (!name) { this._error = this._t("err_tpl_name"); this._render(true); return; }
     let duration = null;
     if (f.start && f.end) {
-      const mins = Math.round((new Date(f.end) - new Date(f.start)) / 60000);
+      const mins = Math.round((this._toDate(f.end) - this._toDate(f.start)) / 60000);
       if (mins > 0) duration = mins;
     }
     const tpl = { name, reason: f.reason.trim(), pages: f.scope === "pages" ? f.pages : [],
@@ -1109,7 +1158,7 @@ async _act(action, target) {
       this._render(true);
       return;
     }
-    const iso = (v) => (v ? new Date(v).toISOString() : null);
+    const iso = (v) => (v ? this._toDate(v)?.toISOString() ?? null : null);
     const base = { reason: f.reason.trim(), pages: f.scope === "pages" ? f.pages : [] };
     const end = iso(f.end);
     let ok;
