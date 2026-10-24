@@ -75,7 +75,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        entry.runtime_data.async_unload()
+        manager = entry.runtime_data
+        manager.async_unload()
+        await manager.async_flush()          # termine l'écriture éventuellement en attente
         frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
         return True
     return False

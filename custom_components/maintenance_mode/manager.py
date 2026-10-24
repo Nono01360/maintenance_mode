@@ -49,6 +49,7 @@ from .const import (
     REPEATS,
     ROLE_ADMIN,
     ROLE_VIEWER,
+    SAVE_DELAY,
     SIGNAL_STATE_UPDATED,
 )
 
@@ -463,13 +464,13 @@ class MaintenanceManager:
             if self.current:
                 await self._deactivate("replaced")
             await self._activate(window)
-            await self._commit()
+            await self._commit(now=True)
 
     async def async_stop(self) -> None:
         async with self._lock:
             if self.current:
                 await self._deactivate("manual")
-                await self._commit()
+                await self._commit(now=True)
 
     async def async_update_current(
         self, *, end: datetime | None, reason: str, pages: list[str]
@@ -865,14 +866,14 @@ class MaintenanceManager:
         async with self._lock:
             await self._process_due()
             await self._reapply_suspension()   # HA vient de (re)démarrer
-            await self._commit()
+            await self._commit(now=True)
 
     async def _async_timer_cb(self, _now: datetime) -> None:
         if self._unloaded:
             return
         async with self._lock:
             await self._process_due()
-            await self._commit()
+            await self._commit(now=True)
 
     def _cancel_timer(self) -> None:
         if self._timer:
@@ -921,21 +922,36 @@ class MaintenanceManager:
         else:
             ir.async_delete_issue(self.hass, DOMAIN, "missing_automations")
 
-    async def _commit(self) -> None:
+    def _data_to_save(self) -> dict[str, Any]:
+        return {
+            "config": self.config,
+            "disabled": self.disabled,
+            "current": self.current.as_dict() if self.current else None,
+            "schedule": [w.as_dict() for w in self.schedule],
+            "history": self.history,
+            "notified": self.notified,
+        }
+
+    async def async_flush(self) -> None:
+        """Écrit tout de suite l'état courant (déchargement de l'intégration)."""
+        await self._store.async_save(self._data_to_save())
+
+    async def _commit(self, *, now: bool = False) -> None:
+        """Applique et enregistre l'état.
+
+        `now=True` : transitions de maintenance (démarrage, fin, échéances) — écriture IMMÉDIATE, car
+        c'est ce qui doit survivre à un arrêt brutal. Sinon (réglages, planning, historique…), l'écriture
+        est différée de quelques secondes et groupée : une rafale de modifications = une seule écriture.
+        Rien n'est perdu : l'écriture en attente est terminée au déchargement et à l'arrêt de HA.
+        """
         await self._refresh_users()
         await self._send_due_notifications(dt_util.utcnow())
         self._reschedule()
         self._update_issues()
-        await self._store.async_save(
-            {
-                "config": self.config,
-                "disabled": self.disabled,
-                "current": self.current.as_dict() if self.current else None,
-                "schedule": [w.as_dict() for w in self.schedule],
-                "history": self.history,
-                "notified": self.notified,
-            }
-        )
+        if now:
+            await self._store.async_save(self._data_to_save())
+        else:
+            self._store.async_delay_save(self._data_to_save, SAVE_DELAY)
         for update in list(self._listeners):
             update()
         async_dispatcher_send(self.hass, SIGNAL_STATE_UPDATED)   # panneaux ouverts (toutes instances)

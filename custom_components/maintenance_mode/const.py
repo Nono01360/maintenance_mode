@@ -42,6 +42,9 @@ BANNER_MODES = ("bar", "card")
 # aux écouteurs attachés à une instance du gestionnaire).
 SIGNAL_STATE_UPDATED = f"{DOMAIN}_state_updated"
 
+# Délai avant écriture des réglages « ordinaires » (les transitions de maintenance s'écrivent aussitôt)
+SAVE_DELAY = 2.0
+
 DEFAULT_WARN_MINUTES = 15
 DEFAULT_MESSAGE = "Home Assistant est temporairement indisponible pour cause de maintenance."
 
