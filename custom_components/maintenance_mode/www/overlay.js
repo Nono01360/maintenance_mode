@@ -756,48 +756,93 @@
   };
 
   // ---------- boucle principale ----------
-  const check = () => {
-    const hass = getHass();
-    if (!hass?.user) return;
-    activeTz = tzOf(hass);
-    const st = findState(hass);
-    if (!st) {
-      setPanelHidden(false); syncSidebarPref(hass, false);
-      removeOverlay(); removeToast(); removeBanner(); removeBar();
-      return;
-    }
-
-    // Utilisateur sans accès au panneau : on retire son entrée du menu latéral.
-    const panelHidden = !hass.user.is_owner && (st.attributes.panel_hidden_for || []).includes(hass.user.id);
-    setPanelHidden(panelHidden);
-    syncSidebarPref(hass, panelHidden);
-
-    const now = new Date();
-    const cur = parseWin(st.attributes.current);
-    const exempt = hass.user.is_owner || (st.attributes.exempt_users || []).includes(hass.user.id);
-    const barMode = st.attributes.banner_mode !== "card";   // « bar » par défaut
-
-    if (st.state === "on" && cur && !exempt && pageBlocked(cur.pages)) {
-      removeToast(); removeBanner(); removeBar();
-      renderOverlay(st, cur, hass, now);
-      return;
-    }
-    removeOverlay();
-    if (st.state === "on") {
-      removeToast();
-      // Non bloqué alors que la maintenance les concernerait : on le rappelle
-      if (cur && exempt && pageBlocked(cur.pages)) {
-        if (barMode) { removeBanner(); renderActiveBar(st, cur, hass, now, !panelHidden); }
-        else { removeBar(); renderBanner(cur, hass, now, !panelHidden); }
-      } else {
-        removeBanner(); removeBar();
+  // Chaque étape est isolée : une erreur (structure de Home Assistant qui change, DOM inattendu…)
+  // n'empêche JAMAIS les autres, en particulier l'affichage du blocage, qui passe en premier.
+  const warned = new Set();
+  const safe = (label, fn) => {
+    try {
+      return fn();
+    } catch (err) {
+      if (!warned.has(label)) {
+        warned.add(label);
+        console.warn(`maintenance_mode : l'étape « ${label} » a échoué (les autres continuent)`, err);
       }
-    } else {
-      removeBanner();
-      if (barMode) { removeToast(); renderUpcomingBar(st, hass, now); }
-      else { removeBar(); renderToast(st, hass, now); }
+      return undefined;
     }
   };
 
-  setInterval(check, 1000);
+  // Retourne « occupé » (quelque chose est affiché ou à surveiller de près) pour régler la cadence.
+  const check = () => {
+    const hass = getHass();
+    if (!hass?.user) return false;
+    safe("fuseau horaire", () => { activeTz = tzOf(hass); });
+    const st = safe("recherche de l'entité", () => findState(hass));
+    if (!st) {
+      safe("nettoyage", () => { removeOverlay(); removeToast(); removeBanner(); removeBar(); });
+      safe("menu latéral", () => { setPanelHidden(false); syncSidebarPref(hass, false); });
+      return false;
+    }
+
+    const now = new Date();
+    const cur = safe("lecture de la maintenance", () => parseWin(st.attributes.current));
+    const exempt = hass.user.is_owner || (st.attributes.exempt_users || []).includes(hass.user.id);
+    const panelHidden = !hass.user.is_owner && (st.attributes.panel_hidden_for || []).includes(hass.user.id);
+    const barMode = st.attributes.banner_mode !== "card";   // « bar » par défaut
+    const on = st.state === "on";
+    const blocked = !!(on && cur && !exempt && safe("pages bloquées", () => pageBlocked(cur.pages)) !== false);
+
+    // 1. Le plus important : le blocage
+    if (blocked) {
+      safe("nettoyage des notifications", () => { removeToast(); removeBanner(); removeBar(); });
+      safe("page de maintenance", () => renderOverlay(st, cur, hass, now));
+    } else {
+      safe("retrait de la page de maintenance", removeOverlay);
+      safe("notification", () => {
+        if (on) {
+          removeToast();
+          // Non bloqué alors que la maintenance les concernerait : on le rappelle
+          if (cur && exempt && pageBlocked(cur.pages)) {
+            if (barMode) { removeBanner(); renderActiveBar(st, cur, hass, now, !panelHidden); }
+            else { removeBar(); renderBanner(cur, hass, now, !panelHidden); }
+          } else {
+            removeBanner(); removeBar();
+          }
+        } else {
+          removeBanner();
+          if (barMode) { removeToast(); renderUpcomingBar(st, hass, now); }
+          else { removeBar(); renderToast(st, hass, now); }
+        }
+      });
+    }
+
+    // 2. Confort : l'entrée du menu latéral pour les utilisateurs sans accès au panneau
+    safe("menu latéral", () => { setPanelHidden(panelHidden); syncSidebarPref(hass, panelHidden); });
+
+    return on || !!(overlay || bar || toast || banner) || (panelHidden && !sidebarEl);
+  };
+
+  // ---------- cadence de la boucle ----------
+  // Rapide (1 s) tant qu'il y a quelque chose à afficher, plus lente sinon, et ARRÊTÉE quand l'onglet est
+  // masqué (téléphone verrouillé, autre onglet) : elle repart aussitôt au retour de l'utilisateur.
+  const BUSY_MS = 1000;
+  const IDLE_MS = 2000;
+  let timer = null;
+
+  const tick = () => {
+    timer = null;
+    if (document.hidden) return;
+    const busy = safe("boucle d'affichage", check);
+    timer = setTimeout(tick, busy ? BUSY_MS : IDLE_MS);
+  };
+
+  const wake = () => {
+    if (document.hidden) return;
+    if (timer) clearTimeout(timer);
+    tick();
+  };
+
+  document.addEventListener("visibilitychange", wake);
+  window.addEventListener("focus", wake);
+  window.addEventListener("location-changed", wake);
+  tick();
 })();
