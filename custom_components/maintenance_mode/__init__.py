@@ -1,6 +1,7 @@
 """Intégration Mode maintenance."""
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from homeassistant.components import frontend, panel_custom
@@ -10,6 +11,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.storage import Store
 
 from . import services, websocket_api
 from .const import (
@@ -22,7 +25,9 @@ from .const import (
     STATIC_BASE,
     VERSION,
 )
-from .manager import MaintenanceManager
+from .manager import STORAGE_VERSION, MaintenanceManager
+
+_LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -74,3 +79,25 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
         return True
     return False
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Suppression définitive de l'intégration : on ne laisse rien derrière soi.
+
+    Appelée seulement à la suppression (jamais pour un rechargement ni un arrêt de HA, qui ne doivent
+    surtout pas réactiver les automatisations). Si une maintenance était en cours, les automatisations
+    qu'ELLE avait suspendues sont réactivées ; celles que l'utilisateur avait coupées lui-même ne sont
+    pas touchées.
+    """
+    store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
+    data = await store.async_load() or {}
+    suspended = data.get("disabled") or []
+    if data.get("current") and suspended:
+        try:
+            await hass.services.async_call(
+                "automation", "turn_on", {"entity_id": suspended}, blocking=True
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Impossible de réactiver les automatisations à la suppression")
+    await store.async_remove()
+    ir.async_delete_issue(hass, DOMAIN, "missing_automations")
