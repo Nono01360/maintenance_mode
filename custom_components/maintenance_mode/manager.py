@@ -2,74 +2,49 @@
 from __future__ import annotations
 
 import asyncio
-import calendar
 import logging
 import re
 import uuid
-from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
-from typing import Any, Iterator
+from typing import Any
 
-from dateutil.relativedelta import relativedelta
 
-from homeassistant.components.automation import EVENT_AUTOMATION_RELOADED
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.const import STATE_ON
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.event import async_track_point_in_utc_time
-from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
+from .access import AccessMixin
+from .storage import STORAGE_VERSION, StorageMixin, default_config
+from .planning import PlanningMixin
+from .validation import ValidationMixin
+from .suspension import SuspensionMixin
+from .notifications import NotificationsMixin
+from .window import (
+    Window,
+    clean_pages,
+    overlap,
+    parse_iso,
+)
 from .const import (
-    DEFAULT_END_SOON_MINUTES,
     DEFAULT_MESSAGE,
-    DEFAULT_WARN_MINUTES,
     DOMAIN,
-    EVENT_ENDED,
-    EVENT_STARTED,
+    FORBIDDEN_NOTIFY,
     BANNER_MODES,
-    BUILTIN_ROLE_PERMISSIONS,
-    LEGACY_ALLOWED_USERS,
-    LEGACY_AUTOMATIONS,
-    LEGACY_WARN_MINUTES,
-    MAX_HISTORY,
-    MAX_OCCURRENCES,
-    MAX_PAGES,
-    MAX_REASON,
-    MAX_ROLE_NAME,
-    MAX_ROLES,
-    MAX_TEMPLATES,
     MAX_WINDOWS,
     NOTIFY_KINDS,
-    PERMISSIONS,
-    REPEATS,
-    ROLE_ADMIN,
-    ROLE_VIEWER,
     SAVE_DELAY,
     SIGNAL_STATE_UPDATED,
 )
 
 _LOGGER = logging.getLogger(__name__)
-STORAGE_VERSION = 1
-_FAR = datetime(9999, 12, 31, tzinfo=dt_util.UTC)
 _NOTIFY_NAME = re.compile(r"^[a-z0-9_]+$")
 # « notify.notify » est un alias hérité dont le comportement dépend de la plateforme qui
 # l'enregistre (aucun, un seul ou tous les appareils) : on le refuse, de même que
 # « send_message » (service par entité). Choisis un service précis (notify.mobile_app_…).
-_FORBIDDEN_NOTIFY = {"notify", "send_message"}
-_SETTINGS_KEYS = (
-    "automations", "allowed_users", "warn_minutes", "end_soon_minutes", "message",
-    "notify_services", "notify_kinds", "banner_mode", "banner_scroll",
-)
-_STEPS = {
-    "daily": relativedelta(days=1),
-    "weekly": relativedelta(weeks=1),
-    "monthly": relativedelta(months=1),
-}
 
 
 # --------------------------------------------------------------------- utilitaires
@@ -80,176 +55,7 @@ def get_manager(hass: HomeAssistant) -> MaintenanceManager | None:
     return None
 
 
-def _parse(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    parsed = dt_util.parse_datetime(value)
-    return dt_util.as_utc(parsed) if parsed else None
-
-
-def iso(value: datetime | None) -> str | None:
-    return dt_util.as_utc(value).isoformat() if value else None
-
-
-def _clean_pages(pages: list[str] | None) -> list[str]:
-    out: list[str] = []
-    for page in pages or []:
-        page = str(page).strip().strip("/")
-        if page and page not in out:
-            out.append(page)
-    if len(out) > MAX_PAGES:
-        raise ServiceValidationError(f"Maximum {MAX_PAGES} pages par maintenance.")
-    return out
-
-
-def _overlap(a_start, a_end, b_start, b_end) -> bool:
-    return a_start < (b_end or _FAR) and b_start < (a_end or _FAR)
-
-
-def _add_month(local: datetime, anchor_day: int) -> datetime:
-    """Mois suivant, au jour d'origine (`anchor_day`) ou au dernier jour du mois s'il est plus court."""
-    year = local.year + local.month // 12
-    month = local.month % 12 + 1
-    last = calendar.monthrange(year, month)[1]
-    return local.replace(year=year, month=month, day=min(anchor_day, last))
-
-
-def _shift(start: datetime, end: datetime | None, repeat: str, anchor_day: int | None = None):
-    """Décale d'une période en heure locale (l'heure « murale » est conservée malgré le DST).
-
-    Mensuel : le jour d'origine est mémorisé (`anchor_day`), sinon 31 janvier → 28 février →
-    28 mars… dériverait vers le bas à chaque mois court.
-    """
-    local_start = dt_util.as_local(start)
-    if repeat == "monthly":
-        new_start = _add_month(local_start, anchor_day or local_start.day)
-    else:
-        new_start = local_start + _STEPS[repeat]
-    new_end = None
-    if end:
-        # la durée « murale » est conservée : même heure de fin locale, quel que soit le DST
-        wall = dt_util.as_local(end).replace(tzinfo=None) - local_start.replace(tzinfo=None)
-        new_end = (new_start.replace(tzinfo=None) + wall).replace(tzinfo=new_start.tzinfo)
-    return dt_util.as_utc(new_start), (dt_util.as_utc(new_end) if new_end else None)
-
-
-@dataclass
-class Window:
-    """Une période de maintenance (en cours ou planifiée)."""
-
-    id: str
-    start: datetime
-    end: datetime | None = None
-    reason: str = ""
-    pages: list[str] = field(default_factory=list)  # vide = tout Home Assistant
-    pause_automations: bool = True
-    repeat: str = "none"
-    started_by: str = ""
-    anchor_day: int | None = None  # jour du mois d'origine (répétition mensuelle)
-
-    def as_dict(self, *, public: bool = False) -> dict[str, Any]:
-        """`public=True` : version sans l'initiateur, pour tout ce qui est lisible par les
-        utilisateurs (attributs d'entités, panneau sans l'autorisation `history`)."""
-        data = {
-            "id": self.id,
-            "start": iso(self.start),
-            "end": iso(self.end),
-            "reason": self.reason,
-            "pages": list(self.pages),
-            "pause_automations": self.pause_automations,
-            "repeat": self.repeat,
-            "anchor_day": self.anchor_day,
-        }
-        if not public:
-            data["started_by"] = self.started_by
-        return data
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Window | None:
-        start = _parse(data.get("start"))
-        if start is None:
-            return None
-        repeat = data.get("repeat", "none")
-        return cls(
-            id=data.get("id") or uuid.uuid4().hex[:8],
-            start=start,
-            end=_parse(data.get("end")),
-            reason=str(data.get("reason", "")),
-            pages=list(data.get("pages", [])),
-            pause_automations=bool(data.get("pause_automations", True)),
-            repeat=repeat if repeat in REPEATS else "none",
-            started_by=str(data.get("started_by", "")),
-            anchor_day=data.get("anchor_day"),
-        )
-
-    def next_occurrence(self, now: datetime) -> Window:
-        start, end = self.start, self.end
-        for _ in range(10000):
-            start, end = _shift(start, end, self.repeat, self.anchor_day)
-            if start > now:
-                break
-        return replace(self, id=uuid.uuid4().hex[:8], start=start, end=end, started_by="")
-
-    def occurrences(self, until: datetime) -> Iterator[tuple[datetime, datetime | None]]:
-        """Occurrences (la 1re est la fenêtre elle-même) jusqu'à `until`."""
-        start, end = self.start, self.end
-        for _ in range(MAX_OCCURRENCES):
-            if start >= until:
-                return
-            yield start, end
-            if self.repeat == "none":
-                return
-            start, end = _shift(start, end, self.repeat, self.anchor_day)
-
-
-def _default_config() -> dict[str, Any]:
-    return {
-        "automations": [],       # vide = toutes les automatisations
-        "allowed_users": [],     # exemptés ; vide = seul le propriétaire
-        "warn_minutes": DEFAULT_WARN_MINUTES,
-        "message": DEFAULT_MESSAGE,
-        "panel_access": {},      # {user_id: rôle}
-        "notify_services": [],   # noms de services notify.* (ex. mobile_app_pixel)
-        "notify_kinds": list(NOTIFY_KINDS),
-        "end_soon_minutes": DEFAULT_END_SOON_MINUTES,
-        "templates": [],
-        "roles": [],             # rôles personnalisés : [{id, name, permissions}]
-        "banner_mode": "bar",    # "bar" (bandeau en haut de la page) ou "card"
-        "banner_scroll": True,   # défilement du texte s'il dépasse la fenêtre
-    }
-
-
-def _fmt_local(value: datetime) -> str:
-    local = dt_util.as_local(value)
-    if local.date() == dt_util.as_local(dt_util.utcnow()).date():
-        return local.strftime("%H:%M")
-    return local.strftime("%d/%m %H:%M")
-
-
-def _notification_text(hass: HomeAssistant, kind: str, w: Window) -> tuple[str, str]:
-    en = (hass.config.language or "fr").startswith("en")
-    reason = f" {w.reason}" if w.reason else ""
-    if kind == "pre":
-        mins = max(0, int((w.start - dt_util.utcnow()).total_seconds() // 60))
-        if en:
-            return "Scheduled maintenance", f"Starts in {mins} min ({_fmt_local(w.start)}).{reason}"
-        return "Maintenance prévue", f"Début dans {mins} min ({_fmt_local(w.start)}).{reason}"
-    if kind == "started":
-        end = _fmt_local(w.end) if w.end else None
-        if en:
-            return "Maintenance started", (f"Expected end: {end}." if end else "Home Assistant will be available as soon as possible.") + reason
-        return "Maintenance en cours", (f"Fin prévue à {end}." if end else "Home Assistant sera disponible dès que possible.") + reason
-    if kind == "end_soon":
-        end = _fmt_local(w.end) if w.end else "?"
-        if en:
-            return "Maintenance ending soon", f"Expected end: {end}."
-        return "La maintenance se termine bientôt", f"Fin prévue à {end}."
-    if en:
-        return "Maintenance finished", "Home Assistant is available again."
-    return "Maintenance terminée", "Home Assistant est de nouveau disponible."
-
-
-class MaintenanceManager:
+class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, ValidationMixin, PlanningMixin, StorageMixin):
     """Source de vérité unique ; entités, panneau, services et calendrier la reflètent."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -260,7 +66,7 @@ class MaintenanceManager:
         self.schedule: list[Window] = []
         self.history: list[dict[str, Any]] = []
         self.notified: list[str] = []
-        self.config: dict[str, Any] = _default_config()
+        self.config: dict[str, Any] = default_config()
         self.users: list[dict[str, Any]] = []
         self.owner_ids: list[str] = []
         self._store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
@@ -271,52 +77,6 @@ class MaintenanceManager:
         self._unloaded = False
 
     # ------------------------------------------------------------------ chargement
-    async def async_load(self) -> None:
-        data: dict[str, Any] = await self._store.async_load() or {}
-        cfg = data.get("config")
-        if cfg is None:  # migration depuis la v0.2
-            cfg = {}
-            opts = self.entry.options
-            if opts.get(LEGACY_AUTOMATIONS):
-                cfg["automations"] = list(opts[LEGACY_AUTOMATIONS])
-            if opts.get(LEGACY_ALLOWED_USERS):
-                cfg["allowed_users"] = list(opts[LEGACY_ALLOWED_USERS])
-            if opts.get(LEGACY_WARN_MINUTES):
-                cfg["warn_minutes"] = int(opts[LEGACY_WARN_MINUTES])
-            if data.get("message"):
-                cfg["message"] = data["message"]
-        self.config = {**_default_config(), **cfg}
-        self.config["notify_services"] = [
-            n for n in self.config["notify_services"] if n not in _FORBIDDEN_NOTIFY
-        ]
-        self.disabled = list(data.get("disabled", []))
-        self.history = list(data.get("history", []))[-MAX_HISTORY:]
-        for entry in self.history:
-            entry.setdefault("hid", uuid.uuid4().hex[:8])  # entrées créées avant la v0.6
-        self.notified = list(data.get("notified", []))[-200:]
-
-        if data.get("current"):
-            self.current = Window.from_dict(data["current"])
-        elif data.get("active"):  # ancien format
-            self.current = Window(uuid.uuid4().hex[:8], dt_util.utcnow(), _parse(data.get("end")))
-        self.schedule = [w for d in data.get("schedule", []) if (w := Window.from_dict(d))]
-        legacy_start = _parse(data.get("start"))
-        if (
-            "schedule" not in data
-            and data.get("start_armed")
-            and legacy_start
-            and legacy_start > dt_util.utcnow()
-        ):
-            self.schedule = [Window(uuid.uuid4().hex[:8], legacy_start, _parse(data.get("end")))]
-        self.schedule.sort(key=lambda w: w.start)
-
-        await self._refresh_users()
-        # Un rechargement des automatisations (`automation.reload`) peut en rallumer certaines
-        self._unsub_reload = self.hass.bus.async_listen(
-            EVENT_AUTOMATION_RELOADED, self._async_on_automation_reload
-        )
-        async_at_started(self.hass, self._async_resume)
-
     @callback
     def async_unload(self) -> None:
         self._unloaded = True
@@ -340,112 +100,10 @@ class MaintenanceManager:
 
     # ------------------------------------------------------------------ lecture
     @property
-    def exempt_users(self) -> list[str]:
-        """Utilisateurs jamais bloqués : exemptés choisis + propriétaire(s)."""
-        return sorted({*self.config["allowed_users"], *self.owner_ids})
-
-    @property
-    def hidden_panel_users(self) -> list[str]:
-        """Utilisateurs sans accès au panneau (son entrée de menu est masquée)."""
-        return [
-            u["id"]
-            for u in self.users
-            if "view" not in self.role_perms(
-                self.effective_role(u["id"], u["is_owner"], u["is_admin"])
-            )
-        ]
-
-    @property
     def next_window(self) -> Window | None:
         return self.schedule[0] if self.schedule else None
 
     # -- rôles et autorisations --
-    @staticmethod
-    def _normalize_perms(perms) -> list[str]:
-        wanted = {p for p in perms if p in PERMISSIONS}
-        if wanted:
-            wanted.add("view")  # sans « view » les autres droits seraient inutilisables
-        if "history_delete" in wanted:
-            wanted.add("history")  # on ne supprime pas ce qu'on ne peut pas voir
-        return [p for p in PERMISSIONS if p in wanted]
-
-    def role_perms(self, role_id: str, roles: list[dict[str, Any]] | None = None) -> set[str]:
-        if role_id in BUILTIN_ROLE_PERMISSIONS:
-            return set(BUILTIN_ROLE_PERMISSIONS[role_id])
-        for role in self.config["roles"] if roles is None else roles:
-            if role["id"] == role_id:
-                return set(role["permissions"])
-        return set()
-
-    def role_exists(self, role_id: str, roles: list[dict[str, Any]] | None = None) -> bool:
-        return role_id in BUILTIN_ROLE_PERMISSIONS or any(
-            r["id"] == role_id for r in (self.config["roles"] if roles is None else roles)
-        )
-
-    def role_name(self, role_id: str) -> str | None:
-        for role in self.config["roles"]:
-            if role["id"] == role_id:
-                return role["name"]
-        return None  # rôle intégré : le panneau le traduit
-
-    def effective_role(self, user_id: str, is_owner: bool, is_admin: bool) -> str:
-        if is_owner:
-            return ROLE_ADMIN
-        role = self.config["panel_access"].get(user_id)
-        if role and self.role_exists(role):
-            return role
-        return ROLE_ADMIN if is_admin else ROLE_VIEWER
-
-    def role_for(self, user: Any) -> str:
-        return self.effective_role(user.id, user.is_owner, user.is_admin)
-
-    def perms_for(self, user: Any) -> set[str]:
-        return self.role_perms(self.role_for(user))
-
-    def state_for(self, user: Any) -> dict[str, Any]:
-        """Données envoyées au panneau, filtrées selon les autorisations."""
-        role = self.role_for(user)
-        perms = self.role_perms(role)
-        if "view" not in perms:
-            return {"role": role, "role_name": self.role_name(role), "permissions": []}
-        data: dict[str, Any] = {
-            "role": role,
-            "role_name": self.role_name(role),
-            "permissions": [p for p in PERMISSIONS if p in perms],
-            "now": iso(dt_util.utcnow()),
-            "active": self.current is not None,
-            "current": self.current.as_dict(public=True) if self.current else None,
-            "upcoming": [w.as_dict(public=True) for w in self.schedule],
-            "message": self.config["message"],
-        }
-        cfg: dict[str, Any] = {}
-        if "settings" in perms:
-            for key in _SETTINGS_KEYS:
-                value = self.config[key]
-                cfg[key] = list(value) if isinstance(value, list) else value
-        if perms & {"templates", "schedule", "control"}:
-            cfg["templates"] = [dict(t) for t in self.config["templates"]]
-        if "access" in perms:
-            cfg["roles"] = [dict(r) for r in self.config["roles"]]
-            cfg["panel_access"] = dict(self.config["panel_access"])
-        if cfg:
-            data["config"] = cfg
-        if perms & {"settings", "access"}:
-            access = self.config["panel_access"]
-            data["users"] = [
-                {
-                    **u,
-                    "role": self.effective_role(u["id"], u["is_owner"], u["is_admin"]),
-                    "explicit": u["id"] in access,
-                }
-                for u in self.users
-            ]
-        if perms & {"control", "settings"}:
-            data["disabled_count"] = len(self.disabled)
-        if "history" in perms:
-            data["history"] = list(reversed(self.history))[:20]
-        return data
-
     # ------------------------------------------------------------------ actions
     async def async_start_now(
         self, *, end: datetime | None, reason: str, pages: list[str], pause: bool, by: str = ""
@@ -457,7 +115,7 @@ class MaintenanceManager:
                 start=dt_util.utcnow(),
                 end=end,
                 reason=self._check_reason(reason),
-                pages=_clean_pages(pages),
+                pages=clean_pages(pages),
                 pause_automations=pause,
                 started_by=by,
             )
@@ -481,11 +139,11 @@ class MaintenanceManager:
             end = self._check_end(end)
             if end:
                 for w in self.schedule:
-                    if _overlap(self.current.start, end, w.start, w.end):
+                    if overlap(self.current.start, end, w.start, w.end):
                         raise ServiceValidationError("La fin chevauche une maintenance planifiée.")
             self.current.end = end
             self.current.reason = self._check_reason(reason)
-            self.current.pages = _clean_pages(pages)
+            self.current.pages = clean_pages(pages)
             await self._commit()
 
     async def async_add_window(
@@ -507,7 +165,7 @@ class MaintenanceManager:
                 start=start,
                 end=end,
                 reason=self._check_reason(reason),
-                pages=_clean_pages(pages),
+                pages=clean_pages(pages),
                 pause_automations=pause,
                 repeat=self._check_repeat(repeat, start, end),
                 anchor_day=dt_util.as_local(start).day,
@@ -533,7 +191,7 @@ class MaintenanceManager:
             start, end = self._check_window(start, end, ignore_id=window_id)
             window.start, window.end = start, end
             window.reason = self._check_reason(reason)
-            window.pages = _clean_pages(pages)
+            window.pages = clean_pages(pages)
             window.pause_automations = pause
             window.repeat = self._check_repeat(repeat, start, end)
             window.anchor_day = dt_util.as_local(start).day
@@ -564,7 +222,7 @@ class MaintenanceManager:
                 limit = dt_util.utcnow() - older_than
                 self.history = [
                     h for h in self.history
-                    if (ended := _parse(h.get("ended_at"))) is None or ended >= limit
+                    if (ended := parse_iso(h.get("ended_at"))) is None or ended >= limit
                 ]
             removed = before - len(self.history)
             if removed:
@@ -596,7 +254,7 @@ class MaintenanceManager:
                 cfg["notify_services"] = [
                     n
                     for n in dict.fromkeys(changes["notify_services"])
-                    if _NOTIFY_NAME.match(n) and n not in _FORBIDDEN_NOTIFY
+                    if _NOTIFY_NAME.match(n) and n not in FORBIDDEN_NOTIFY
                 ][:20]
             if "notify_kinds" in changes:
                 cfg["notify_kinds"] = [k for k in NOTIFY_KINDS if k in changes["notify_kinds"]]
@@ -637,173 +295,7 @@ class MaintenanceManager:
             await self._commit()
 
     # ------------------------------------------------------------------ validation
-    def _find(self, window_id: str) -> Window:
-        for window in self.schedule:
-            if window.id == window_id:
-                return window
-        raise ServiceValidationError("Maintenance introuvable.")
-
-    @staticmethod
-    def _check_reason(reason: str) -> str:
-        reason = (reason or "").strip()
-        if len(reason) > MAX_REASON:
-            raise ServiceValidationError(f"Motif trop long ({MAX_REASON} caractères max).")
-        return reason
-
-    @staticmethod
-    def _check_repeat(repeat: str, start: datetime, end: datetime | None) -> str:
-        if repeat not in REPEATS:
-            raise ServiceValidationError("Répétition invalide.")
-        if repeat != "none" and end is None:
-            raise ServiceValidationError("Une maintenance répétée doit avoir une fin.")
-        if repeat != "none" and end is not None:
-            next_start, _ = _shift(start, end, repeat)
-            if end > next_start:
-                raise ServiceValidationError("La durée dépasse la période de répétition.")
-        return repeat
-
-    @staticmethod
-    def _check_end(end: datetime | None) -> datetime | None:
-        if end is None:
-            return None
-        end = dt_util.as_utc(end)
-        if end <= dt_util.utcnow():
-            raise ServiceValidationError("La fin doit être dans le futur.")
-        return end
-
-    def _check_window(self, start, end, *, ignore_id):
-        start = dt_util.as_utc(start)
-        end = dt_util.as_utc(end) if end else None
-        if start <= dt_util.utcnow():
-            raise ServiceValidationError("Le début doit être dans le futur.")
-        if end is not None and end <= start:
-            raise ServiceValidationError("La fin doit être postérieure au début.")
-        for other in self.schedule:
-            if other.id != ignore_id and _overlap(start, end, other.start, other.end):
-                raise ServiceValidationError("Cette période chevauche une autre maintenance planifiée.")
-        if self.current and self.current.end and _overlap(start, end, self.current.start, self.current.end):
-            raise ServiceValidationError("Cette période chevauche la maintenance en cours.")
-        return start, end
-
-    def _clean_roles(self, raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        existing = {r["id"] for r in self.config["roles"]}
-        out: list[dict[str, Any]] = []
-        used: set[str] = set()
-        for r in raw[:MAX_ROLES]:
-            name = str(r.get("name", "")).strip()[:MAX_ROLE_NAME]
-            if not name:
-                continue
-            rid = str(r.get("id") or "")
-            if rid in BUILTIN_ROLE_PERMISSIONS or rid in used or (rid and rid not in existing):
-                rid = ""  # identifiant inconnu ou déjà pris : on en génère un
-            rid = rid or f"r{uuid.uuid4().hex[:6]}"
-            used.add(rid)
-            out.append(
-                {"id": rid, "name": name, "permissions": self._normalize_perms(r.get("permissions", []))}
-            )
-        return out
-
-    @staticmethod
-    def _clean_templates(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        out: list[dict[str, Any]] = []
-        for t in raw[:MAX_TEMPLATES]:
-            name = str(t.get("name", "")).strip()[:40]
-            if not name:
-                continue
-            duration = t.get("duration")
-            repeat = t.get("repeat", "none")
-            out.append(
-                {
-                    "id": str(t.get("id") or uuid.uuid4().hex[:8])[:12],
-                    "name": name,
-                    "reason": str(t.get("reason", "")).strip()[:MAX_REASON],
-                    "pages": _clean_pages(t.get("pages", [])),
-                    "pause_automations": bool(t.get("pause_automations", True)),
-                    "duration": int(duration) if duration else None,
-                    "repeat": repeat if repeat in REPEATS else "none",
-                }
-            )
-        return out
-
     # ------------------------------------------------------------------ interne
-    def _targets(self) -> list[str]:
-        """Automatisations à couper : celles choisies, ou toutes si aucune choisie."""
-        selected = self.config["automations"]
-        candidates = selected or self.hass.states.async_entity_ids("automation")
-        return [
-            e for e in candidates
-            if (state := self.hass.states.get(e)) and state.state == STATE_ON
-        ]
-
-    async def _activate(self, window: Window) -> None:
-        targets = self._targets() if window.pause_automations else []
-        if targets:
-            try:
-                await self.hass.services.async_call(
-                    "automation", "turn_off",
-                    {"entity_id": targets, "stop_actions": True}, blocking=True,
-                )
-            except Exception:  # noqa: BLE001
-                _LOGGER.exception("Impossible de désactiver les automatisations")
-        self.disabled = targets
-        self.current = window
-        self.hass.bus.async_fire(EVENT_STARTED, window.as_dict())
-        await self._notify("started", window)
-
-    async def _deactivate(self, ended_by: str = "manual") -> None:
-        window = self.current
-        if self.disabled:
-            try:
-                await self.hass.services.async_call(
-                    "automation", "turn_on", {"entity_id": self.disabled}, blocking=True
-                )
-            except Exception:  # noqa: BLE001
-                _LOGGER.exception("Impossible de réactiver les automatisations")
-        self.disabled = []
-        self.current = None
-        if window:
-            now = dt_util.utcnow()
-            self.history.append(
-                {**window.as_dict(), "hid": uuid.uuid4().hex[:8], "ended_at": iso(now), "ended_by": ended_by}
-            )
-            self.history = self.history[-MAX_HISTORY:]
-            self.hass.bus.async_fire(EVENT_ENDED, {**window.as_dict(), "ended_by": ended_by})
-            if ended_by != "replaced":
-                await self._notify("ended", window)
-
-    async def _notify(self, kind: str, window: Window) -> None:
-        key = f"{window.id}:{kind}"
-        if key in self.notified:
-            return
-        self.notified = [*self.notified, key][-200:]
-        services = self.config["notify_services"]
-        if not services or kind not in self.config["notify_kinds"]:
-            return
-        title, message = _notification_text(self.hass, kind, window)
-        for name in services:
-            if name in _FORBIDDEN_NOTIFY or not self.hass.services.has_service("notify", name):
-                continue
-            try:
-                await self.hass.services.async_call(
-                    "notify", name, {"title": title, "message": message}, blocking=False
-                )
-            except Exception:  # noqa: BLE001
-                _LOGGER.exception("Échec de la notification via notify.%s", name)
-
-    async def _send_due_notifications(self, now: datetime) -> None:
-        kinds = self.config["notify_kinds"]
-        if not self.config["notify_services"]:
-            return
-        if "pre" in kinds:
-            warn = timedelta(minutes=self.config["warn_minutes"])
-            for w in list(self.schedule):
-                if w.start - warn <= now < w.start:
-                    await self._notify("pre", w)
-        if "end_soon" in kinds and self.current and self.current.end:
-            soon = timedelta(minutes=self.config["end_soon_minutes"])
-            if self.current.end - soon <= now < self.current.end:
-                await self._notify("end_soon", self.current)
-
     async def _refresh_users(self) -> None:
         users = await self.hass.auth.async_get_users()
         self.users = [
@@ -812,99 +304,6 @@ class MaintenanceManager:
             if u.is_active and not u.system_generated
         ]
         self.owner_ids = [u["id"] for u in self.users if u["is_owner"]]
-
-    async def _process_due(self) -> None:
-        """Termine / démarre ce qui est arrivé à échéance (idempotent)."""
-        now = dt_util.utcnow()
-        if self.current and self.current.end and self.current.end <= now:
-            await self._deactivate("auto")
-        while self.schedule and self.schedule[0].start <= now:
-            window = self.schedule.pop(0)
-            if window.repeat != "none":  # la série continue : prochaine occurrence
-                self.schedule.append(window.next_occurrence(now))
-                self.schedule.sort(key=lambda w: w.start)
-            if window.end and window.end <= now:
-                continue  # entièrement passée (ex. HA éteint)
-            if self.current:
-                await self._deactivate("replaced")
-            window.started_by = window.started_by or "planification"
-            await self._activate(window)
-
-    async def _reapply_suspension(self) -> None:
-        """Remet en pause les automatisations de l'instantané redevenues actives.
-
-        Cas réels : redémarrage de HA (`initial_state: true` écrase l'état restauré ; après un
-        arrêt brutal l'état est celui de la dernière sauvegarde) ou rechargement des automatisations
-        modifiées. On ne touche qu'à l'instantané : une automatisation créée pendant la maintenance
-        n'est pas suspendue, et si aucune maintenance ne suspend rien, on ne fait rien.
-        """
-        if not self.current or not self.disabled:
-            return
-        again = [
-            e for e in self.disabled
-            if (state := self.hass.states.get(e)) and state.state == STATE_ON
-        ]
-        if not again:
-            return
-        _LOGGER.info("Maintenance en cours : %d automatisation(s) remises en pause", len(again))
-        try:
-            await self.hass.services.async_call(
-                "automation", "turn_off", {"entity_id": again, "stop_actions": True}, blocking=True
-            )
-        except Exception:  # noqa: BLE001
-            _LOGGER.exception("Impossible de remettre les automatisations en pause")
-
-    async def _async_on_automation_reload(self, _event: Any) -> None:
-        if self._unloaded or not self.current or not self.disabled:
-            return
-        async with self._lock:
-            await self._reapply_suspension()
-
-    async def _async_resume(self, _hass: HomeAssistant | None = None) -> None:
-        if self._unloaded:
-            return
-        async with self._lock:
-            await self._process_due()
-            await self._reapply_suspension()   # HA vient de (re)démarrer
-            await self._commit(now=True)
-
-    async def _async_timer_cb(self, _now: datetime) -> None:
-        if self._unloaded:
-            return
-        async with self._lock:
-            await self._process_due()
-            await self._commit(now=True)
-
-    def _cancel_timer(self) -> None:
-        if self._timer:
-            self._timer()
-            self._timer = None
-
-    @callback
-    def _reschedule(self) -> None:
-        self._cancel_timer()
-        if self._unloaded:
-            return
-        now = dt_util.utcnow()
-        due: list[datetime] = []
-        if self.current and self.current.end:
-            due.append(self.current.end)
-        if self.schedule:
-            due.append(self.schedule[0].start)
-        if self.config["notify_services"]:
-            kinds = self.config["notify_kinds"]
-            if "pre" in kinds:
-                warn = timedelta(minutes=self.config["warn_minutes"])
-                due += [
-                    w.start - warn for w in self.schedule
-                    if w.start - warn > now and f"{w.id}:pre" not in self.notified
-                ]
-            if "end_soon" in kinds and self.current and self.current.end:
-                t = self.current.end - timedelta(minutes=self.config["end_soon_minutes"])
-                if t > now and f"{self.current.id}:end_soon" not in self.notified:
-                    due.append(t)
-        if due:
-            self._timer = async_track_point_in_utc_time(self.hass, self._async_timer_cb, min(due))
 
     @callback
     def _update_issues(self) -> None:
@@ -921,20 +320,6 @@ class MaintenanceManager:
             )
         else:
             ir.async_delete_issue(self.hass, DOMAIN, "missing_automations")
-
-    def _data_to_save(self) -> dict[str, Any]:
-        return {
-            "config": self.config,
-            "disabled": self.disabled,
-            "current": self.current.as_dict() if self.current else None,
-            "schedule": [w.as_dict() for w in self.schedule],
-            "history": self.history,
-            "notified": self.notified,
-        }
-
-    async def async_flush(self) -> None:
-        """Écrit tout de suite l'état courant (déchargement de l'intégration)."""
-        await self._store.async_save(self._data_to_save())
 
     async def _commit(self, *, now: bool = False) -> None:
         """Applique et enregistre l'état.

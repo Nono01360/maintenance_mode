@@ -72,3 +72,7 @@ MAX_TEMPLATES = 20
 # Évènements déclenchés sur le bus (utilisables comme déclencheurs d'automatisation)
 EVENT_STARTED = f"{DOMAIN}_started"
 EVENT_ENDED = f"{DOMAIN}_ended"
+
+# « notify.notify » est un alias hérité dont le comportement dépend de la plateforme qui l'enregistre
+# (aucun, un seul ou tous les appareils) : on le refuse, de même que « send_message » (service par entité).
+FORBIDDEN_NOTIFY = {"notify", "send_message"}

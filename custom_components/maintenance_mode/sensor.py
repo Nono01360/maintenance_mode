@@ -7,7 +7,7 @@ from typing import Any
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 
 from .entity import MaintenanceEntity
-from .manager import iso
+from .window import iso
 
 
 async def async_setup_entry(hass, entry, async_add_entities):

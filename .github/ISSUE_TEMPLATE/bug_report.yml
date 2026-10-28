@@ -10,14 +10,14 @@ body:
     id: integration_version
     attributes:
       label: Version de l'intégration
-      placeholder: "0.7.0"
+      placeholder: "0.7.7"
     validations:
       required: true
   - type: input
     id: ha_version
     attributes:
       label: Version de Home Assistant
-      placeholder: "2026.2.3"
+      placeholder: "0.7.7"
     validations:
       required: true
   - type: dropdown

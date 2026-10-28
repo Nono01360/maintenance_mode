@@ -25,7 +25,8 @@ from .const import (
     STATIC_BASE,
     VERSION,
 )
-from .manager import STORAGE_VERSION, MaintenanceManager
+from .manager import MaintenanceManager
+from .storage import STORAGE_VERSION
 
 _LOGGER = logging.getLogger(__name__)
 
