@@ -265,7 +265,7 @@ async def test_stored_format(hass, hass_storage):
     assert set(stored["data"]) == {"config", "disabled", "current", "schedule", "history", "notified"}
     assert set(stored["data"]["config"]) == {
         "automations", "allowed_users", "warn_minutes", "message", "panel_access", "notify_services", "notify_kinds",
-        "end_soon_minutes", "templates", "roles", "banner_mode", "banner_scroll",
+        "end_soon_minutes", "templates", "roles", "banner_mode", "banner_scroll", "compat_mode",
     }
     assert set(stored["data"]["current"]) == {
         "id", "start", "end", "reason", "pages", "pause_automations", "repeat", "anchor_day", "started_by",
@@ -334,6 +334,6 @@ async def test_public_attributes_snapshot(hass):
     _, m = await _setup(hass)
     attrs = hass.states.get("switch.mode_maintenance").attributes
     assert set(attrs) - {"friendly_name", "icon"} == {
-        "maintenance_mode_entity", "rights_rev", "message", "banner_mode", "banner_scroll",
+        "maintenance_mode_entity", "rights_rev", "message", "banner_mode", "banner_scroll", "compat_mode",
         "warn_minutes", "current", "next", "scheduled_count",
     }

@@ -132,6 +132,9 @@ automation:
   de « maintenance » aux panneaux masqués de la barre latérale de l'utilisateur (préférence native de Home Assistant,
   retirée automatiquement si l'accès est rendu, sauf si l'utilisateur l'avait masqué lui-même). Ça repose sur des
   éléments internes du frontend (best-effort) ; côté serveur, l'accès est refusé dans tous les cas.
+- **Mode compatibilité** (Paramètres › Compatibilité) : désactive tout ce qui touche à la structure interne de Home Assistant
+  (décalage de la page, masquage de l'entrée de menu) ; la petite carte remplace le bandeau. Le diagnostic de la même
+  carte indique, pour l'appareil que tu utilises, si la structure est reconnue et ce qui est appliqué.
 - Le bandeau pleine largeur repousse l'interface avec un `transform` CSS : si l'affichage est décalé ou cassé
   chez toi, choisis la petite carte dans les paramètres.
 - L'affichage repose sur des éléments internes du frontend de Home Assistant (`ha-card`, `ha-icon`,
@@ -152,7 +155,7 @@ Pense à remplacer `VOTRE_PSEUDO` dans `manifest.json` par ton nom d'utilisateur
 | Symptôme | Cause probable et solution |
 |---|---|
 | Le panneau « Maintenance » n'apparaît pas | Redémarre Home Assistant après une mise à jour, puis recharge la page avec `Ctrl+Maj+R` (dans l'application mobile : *Paramètres de l'application → Débogage → Réinitialiser le cache du frontend*). Si ton rôle est « Aucun accès », il est volontairement masqué. |
-| Le bandeau est décalé ou cache le haut de la page | Passe en « petite carte » (*Paramètres → Notification dans l'interface*). Le bandeau repousse l'interface par une technique CSS qui dépend de la structure de Home Assistant ; en cas de structure inconnue, le code ne touche à rien et écrit un avertissement dans la console (F12). |
+| Le bandeau est décalé ou cache le haut de la page | Active le **mode compatibilité** (Paramètres › Compatibilité) ou passe en « petite carte » (*Paramètres → Notification dans l'interface*). Le bandeau repousse l'interface par une technique CSS qui dépend de la structure de Home Assistant ; en cas de structure inconnue, le code ne touche à rien et écrit un avertissement dans la console (F12). |
 | L'entrée du menu reste visible malgré « Aucun accès » | Le masquage repose sur la structure interne du menu : recharge la page, puis regarde la console (F12). Le panneau reste de toute façon inaccessible côté serveur. |
 | Une automatisation est active pendant une maintenance | Elle n'était peut-être pas dans la sélection, ou a été créée après le démarrage de la maintenance (l'instantané est pris au démarrage). Après un redémarrage ou un rechargement, les automatisations suspendues sont remises en pause. |
 | Les dates sont décalées | Le formulaire suit le fuseau de ton profil (*Profil → Fuseau horaire*) : navigateur ou serveur. Le fuseau utilisé est affiché sous les champs. |

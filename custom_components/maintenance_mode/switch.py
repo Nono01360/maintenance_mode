@@ -43,6 +43,7 @@ class MaintenanceSwitch(MaintenanceEntity, SwitchEntity):
             "message": m.config["message"],
             "banner_mode": m.config["banner_mode"],
             "banner_scroll": m.config["banner_scroll"],
+            "compat_mode": m.config["compat_mode"],
             "warn_minutes": m.config["warn_minutes"],
             # sans l'initiateur : ces attributs sont lisibles par tous les utilisateurs
             "current": m.current.as_dict(public=True) if m.current else None,

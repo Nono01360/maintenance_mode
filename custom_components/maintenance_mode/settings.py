@@ -77,6 +77,8 @@ class SettingsMixin:
                 cfg["banner_mode"] = changes["banner_mode"]
             if "banner_scroll" in changes:
                 cfg["banner_scroll"] = bool(changes["banner_scroll"])
+            if "compat_mode" in changes:
+                cfg["compat_mode"] = bool(changes["compat_mode"])
             if "templates" in changes:
                 cfg["templates"] = self._clean_templates(changes["templates"])
 

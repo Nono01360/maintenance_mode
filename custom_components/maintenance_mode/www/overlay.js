@@ -464,11 +464,41 @@
       }
     };
 
+    // Mode compatibilité (réglage) : désactivé, plus RIEN n'est lu ni modifié dans la structure de Home Assistant ;
+    // ce qui avait été modifié est restauré.
+    let enabled = true;
+    const setEnabled = (on) => {
+      if (enabled === on) return;
+      enabled = on;
+      if (!on) { pushPage(0); setPanelHidden(false); }
+    };
+
+    // État observable (affiché dans le panneau : Paramètres › Compatibilité). La recherche dans le DOM est coûteuse :
+    // au plus une fois toutes les 5 s.
+    let probeAt = 0;
+    let probe = { main: false, sidebar: false };
+    const status = () => {
+      if (enabled && Date.now() - probeAt > 5000) {
+        probeAt = Date.now();
+        try {
+          const ha = getHaEl();
+          probe = {
+            main: !!(pageLock?.mainEl?.isConnected || (ha && deepFind(ha, "home-assistant-main"))),
+            sidebar: !!((sidebarEl && sidebarEl.isConnected) || (ha && deepFind(ha, "ha-sidebar"))),
+          };
+        } catch (_) { probe = { main: false, sidebar: false }; }
+      }
+      return { enabled, main: enabled ? probe.main : null, sidebar: enabled ? probe.sidebar : null,
+        pushed: !!pageLock, menuHidden: hiddenEls.size > 0 };
+    };
+
     return {
-      sidebarWidth,          // largeur de la barre latérale (px) ; 0 si inconnue
-      setPanelHidden,        // masque / réaffiche l'entrée « Maintenance » du menu
-      sidebarPending: () => wantHidden && !sidebarEl,   // vrai tant que le menu n'a pas encore été trouvé
-      pushPage,              // décale toute l'interface de `px` pixels vers le bas (0 = restaure)
+      setEnabled,
+      status,
+      sidebarWidth: () => (enabled ? sidebarWidth() : 0),               // largeur de la barre latérale (px) ; 0 si inconnue
+      setPanelHidden: (hide) => setPanelHidden(enabled && hide),        // masque / réaffiche l'entrée « Maintenance » du menu
+      sidebarPending: () => enabled && wantHidden && !sidebarEl,        // vrai tant que le menu n'a pas encore été trouvé
+      pushPage: (px) => pushPage(enabled ? px : 0),                     // décale l'interface de `px` pixels vers le bas (0 = restaure)
     };
   })();
   // ===================================================================================================== FIN COMPAT
@@ -822,6 +852,11 @@
       return false;
     }
 
+    safe("mode compatibilité", () => {
+      compat.setEnabled(st.attributes.compat_mode !== true);
+      window.__maintenanceModeCompat = compat.status();       // lu par le panneau (diagnostic)
+    });
+
     const now = new Date();
     const cur = safe("lecture de la maintenance", () => parseWin(st.attributes.current));
     // Droits d'affichage : chaque navigateur demande au serveur SES droits (aucun identifiant n'est lisible
@@ -830,7 +865,7 @@
     if (!rts) return true;
     const exempt = rts.exempt;
     const panelHidden = rts.panelHidden;
-    const barMode = st.attributes.banner_mode !== "card";   // « bar » par défaut
+    const barMode = st.attributes.banner_mode !== "card" && st.attributes.compat_mode !== true;   // « bar » par défaut ; carte en mode compatibilité
     const on = st.state === "on";
     const blocked = !!(on && cur && !exempt && safe("pages bloquées", () => pageBlocked(cur.pages)) !== false);
 

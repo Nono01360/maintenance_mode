@@ -106,6 +106,11 @@ const T = {
     banner_bar: "Bandeau en haut de toute la page", banner_card: "Petite carte en haut à droite",
     banner_scroll: "Faire défiler le texte s'il dépasse la fenêtre",
     banner_hint: "Sans défilement, le texte passe à la ligne (avec un ascenseur s'il est très long). Le bandeau repousse l'interface vers le bas ; en cas de problème d'affichage, choisis la petite carte.",
+    s_compat: "Compatibilité", compat_mode: "Mode compatibilité : ne rien modifier dans la structure de Home Assistant",
+    compat_hint: "Désactive le décalage de la page et le masquage de l'entrée de menu (la petite carte remplace le bandeau). À utiliser si l'affichage de Home Assistant est cassé après une mise à jour.",
+    diag_title: "Diagnostic de cet appareil", diag_none: "Aucune information : recharge la page pour que le bandeau se charge.",
+    diag_main: "Structure de la page reconnue", diag_sidebar: "Menu latéral reconnu", diag_pushed: "Page décalée sous le bandeau",
+    diag_menu: "Entrée « Maintenance » masquée dans le menu", diag_mode_on: "Mode compatibilité actif : rien n'est modifié", diag_yes: "oui", diag_no: "non", diag_na: "—",
   },
   en: {
     title: "Maintenance", tab_list: "Maintenance", tab_settings: "Settings", tab_access: "Access",
@@ -168,6 +173,11 @@ const T = {
     banner_bar: "Banner across the top of the whole page", banner_card: "Small card at the top right",
     banner_scroll: "Scroll the text when it does not fit the window",
     banner_hint: "Without scrolling, the text wraps (with a scrollbar if very long). The banner pushes the interface down; if the display looks wrong, choose the small card.",
+    s_compat: "Compatibility", compat_mode: "Compatibility mode: do not modify Home Assistant's page structure",
+    compat_hint: "Turns off the page offset and the hiding of the menu entry (the small card replaces the banner). Use it if the Home Assistant display breaks after an update.",
+    diag_title: "Diagnostics for this device", diag_none: "No information: reload the page so the banner script loads.",
+    diag_main: "Page structure recognised", diag_sidebar: "Sidebar recognised", diag_pushed: "Page pushed below the banner",
+    diag_menu: "\"Maintenance\" menu entry hidden", diag_mode_on: "Compatibility mode on: nothing is modified", diag_yes: "yes", diag_no: "no", diag_na: "—",
   },
 };
 
@@ -357,6 +367,7 @@ class MaintenanceModePanel extends HTMLElement {
       this._draft = {
         banner_mode: d.config.banner_mode || "bar",
         banner_scroll: d.config.banner_scroll !== false,
+        compat_mode: d.config.compat_mode === true,
         automations: [...d.config.automations],
         allowed_users: [...d.config.allowed_users],
         warn_minutes: d.config.warn_minutes,
@@ -764,10 +775,28 @@ class MaintenanceModePanel extends HTMLElement {
           <span>${this._t("banner_scroll")}</span></label>
       </div></ha-card>
 
+      <ha-card class="card"><div class="col">
+        <div><h2>${this._t("s_compat")}</h2><div class="muted">${this._t("compat_hint")}</div></div>
+        <label class="check"><input type="checkbox" data-action="toggle-compat" ${dr.compat_mode ? "checked" : ""}>
+          <span>${this._t("compat_mode")}</span></label>
+        ${this._diagHtml()}
+      </div></ha-card>
+
       <div class="actions" style="margin-top:0">
         <button class="btn primary" data-action="save-settings" ${this._draftDirty ? "" : "disabled"}>${this._t("save_changes")}</button>
         <button class="btn" data-action="reset-settings" ${this._draftDirty ? "" : "disabled"}>${this._t("reset_changes")}</button>
       </div>`;
+  }
+
+  // Diagnostic publié par le script du bandeau (overlay.js) de CET appareil
+  _diagHtml() {
+    const d = window.__maintenanceModeCompat;
+    const yn = (v) => (v === null || v === undefined ? this._t("diag_na") : this._t(v ? "diag_yes" : "diag_no"));
+    if (!d) return `<div class="muted">${this._t("diag_none")}</div>`;
+    const row = (k, v) => `<tr><td>${this._t(k)}</td><td class="muted" style="text-align:right">${yn(v)}</td></tr>`;
+    return `<div><h3>${this._t("diag_title")}</h3>
+      ${d.enabled === false ? `<div class="muted">${this._t("diag_mode_on")}</div>` : ""}
+      <table>${row("diag_main", d.main)}${row("diag_sidebar", d.sidebar)}${row("diag_pushed", d.pushed)}${row("diag_menu", d.menuHidden)}</table></div>`;
   }
 
   _templatesHtml() {
@@ -1083,6 +1112,7 @@ async _act(action, target) {
         notify_kinds: this._draft.notify_kinds,
         banner_mode: this._draft.banner_mode,
         banner_scroll: this._draft.banner_scroll,
+        compat_mode: this._draft.compat_mode,
       });
       if (ok) {
         this._draftDirty = false;
@@ -1104,6 +1134,9 @@ async _act(action, target) {
       }
     } else if (action === "banner-mode") {
       this._draft.banner_mode = target.value;
+      this._markDirty();
+    } else if (action === "toggle-compat") {
+      this._draft.compat_mode = target.checked;
       this._markDirty();
     } else if (action === "toggle-banner-scroll") {
       this._draft.banner_scroll = target.checked;

@@ -13,7 +13,7 @@ const mkState = (perms, extra = {}) => {
   if (p.includes("history_delete") && !p.includes("history")) p = [...p, "history"];   // comme le serveur
   const cfg = {};
   if (p.includes("settings")) Object.assign(cfg, { automations: [], allowed_users: [], warn_minutes: 15, end_soon_minutes: 10, message: "msg",
-    notify_services: [], notify_kinds: ["pre"], banner_mode: "bar", banner_scroll: true });
+    notify_services: [], notify_kinds: ["pre"], banner_mode: "bar", banner_scroll: true, compat_mode: false });
   if (p.some((x) => ["templates", "schedule", "control"].includes(x))) cfg.templates = [{ id: "t1", name: "MAJ", reason: "", pages: [], pause_automations: true, duration: 60, repeat: "none" }];
   if (p.includes("access")) Object.assign(cfg, { roles: [{ id: "r1", name: "Opérateur", permissions: ["view", "control"] }, { id: "r2", name: "Super", permissions: ["view", "settings"] }], panel_access: {} });
   const st = { role: "x", permissions: p, now: new Date().toISOString(), active: false, current: null, message: "m",
@@ -105,6 +105,19 @@ const tabs = (sr) => [...sr.querySelectorAll(".tab")].map((t) => t.dataset.tab).
     sr.querySelector("[data-action=save-settings]").click(); await sleep(20);
     const cfg = calls.filter((c) => c.type === "maintenance_mode/update_config" && "banner_mode" in c).pop();
     ok(cfg && cfg.banner_mode === "card" && cfg.banner_scroll === false, "enregistrement : banner_mode=card, banner_scroll=false");
+  });
+  await panel(["settings"], async ({ sr, calls, w }) => {
+    sr.querySelector("[data-tab=settings]").click(); await sleep(10);
+    ok(sr.textContent.includes("Compatibilité") && sr.textContent.includes("Aucune information"), "compatibilité : carte présente, diagnostic « aucune information » sans script de bandeau");
+    w.__maintenanceModeCompat = { enabled: true, main: true, sidebar: false, pushed: true, menuHidden: false };
+    sr.querySelector("[data-tab=list]").click(); await sleep(10); sr.querySelector("[data-tab=settings]").click(); await sleep(10);
+    ok(sr.textContent.includes("Diagnostic de cet appareil") && sr.textContent.includes("Structure de la page reconnue"), "diagnostic affiché avec les informations de l'appareil");
+    const rows = [...sr.querySelectorAll("table tr")].filter((r) => /reconnu|décalée|masquée/.test(r.textContent)).map((r) => r.textContent.replace(/\s+/g, " ").trim());
+    ok(rows.some((r) => r.includes("Menu latéral reconnu") && r.endsWith("non")) && rows.some((r) => r.includes("Page décalée") && r.endsWith("oui")), "diagnostic : oui / non rendus correctement", rows.join(" | "));
+    const box = sr.querySelector("input[data-action=toggle-compat]"); box.checked = true; box.dispatchEvent(new w.Event("change", { bubbles: true })); await sleep(10);
+    sr.querySelector("[data-action=save-settings]").click(); await sleep(20);
+    const cfg = calls.filter((c) => c.type === "maintenance_mode/update_config" && "compat_mode" in c).pop();
+    ok(cfg && cfg.compat_mode === true, "enregistrement : compat_mode=true");
   });
   await panel(["access"], async ({ sr, calls, w }) => {
     ok(tabs(sr) === "list,access", "accès seul : onglet Accès, pas Paramètres");
