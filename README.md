@@ -139,7 +139,8 @@ automation:
   chez toi, choisis la petite carte dans les paramètres.
 - L'affichage repose sur des éléments internes du frontend de Home Assistant (`ha-card`, `ha-icon`,
   `hass.auth.revoke()` pour la déconnexion). Ils peuvent évoluer d'une version à l'autre.
-- Panneau et page de blocage : français et anglais ; messages d'erreur du serveur en français.
+- Panneau et page de blocage : français et anglais. Les erreurs ont un code stable : le panneau les traduit dans la langue
+  de l'utilisateur ; côté serveur (services, journaux), le message suit la langue de Home Assistant (français ou anglais).
 - Les icônes (`brand/`) ne s'affichent qu'à partir de Home Assistant 2026.3.
 
 ## Publier une nouvelle version

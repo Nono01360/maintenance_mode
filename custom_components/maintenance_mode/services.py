@@ -6,11 +6,11 @@ from datetime import datetime
 import voluptuous as vol
 
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.util import dt as dt_util
 
+from .errors import MaintenanceError
 from .const import DOMAIN, REPEATS
 from .manager import MaintenanceManager, get_manager
 
@@ -36,14 +36,14 @@ CLEAR_HISTORY_SCHEMA = vol.Schema({vol.Optional("older_than"): cv.time_period})
 def _manager(hass: HomeAssistant) -> MaintenanceManager:
     manager = get_manager(hass)
     if manager is None:
-        raise ServiceValidationError("L'intégration Mode maintenance n'est pas chargée.")
+        raise MaintenanceError("not_loaded")
     return manager
 
 
 def _end(data: dict, base: datetime) -> datetime | None:
     """`end` OU `duration` (durée à partir de `base`)."""
     if "end" in data and "duration" in data:
-        raise ServiceValidationError("Indique soit `end`, soit `duration`, pas les deux.")
+        raise MaintenanceError("end_or_duration")
     if "duration" in data:
         return base + data["duration"]
     return data.get("end")

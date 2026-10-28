@@ -9,9 +9,9 @@ from typing import Any, Iterator
 
 from dateutil.relativedelta import relativedelta
 
-from homeassistant.exceptions import ServiceValidationError
 from homeassistant.util import dt as dt_util
 
+from .errors import MaintenanceError
 from .const import MAX_OCCURRENCES, MAX_PAGES, REPEATS
 
 FAR = datetime(9999, 12, 31, tzinfo=dt_util.UTC)
@@ -40,7 +40,7 @@ def clean_pages(pages: list[str] | None) -> list[str]:
         if page and page not in out:
             out.append(page)
     if len(out) > MAX_PAGES:
-        raise ServiceValidationError(f"Maximum {MAX_PAGES} pages par maintenance.")
+        raise MaintenanceError("too_many_pages", max=MAX_PAGES)
     return out
 
 

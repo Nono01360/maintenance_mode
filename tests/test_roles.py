@@ -122,10 +122,10 @@ async def test_ws_permissions_and_no_escalation(hass, hass_ws_client, hass_read_
     assert r["success"], r
     r = await _ws_call(user, 8, type="maintenance_mode/update_config",
                        roles=roles + [{"name": "Trop", "permissions": ["settings"]}])
-    assert not r["success"] and "pas toi-même" in r["error"]["message"]
+    assert not r["success"] and r["error"]["translation_key"] == "cannot_grant"
     # s'auto-promouvoir administrateur est refusé
     r = await _ws_call(user, 9, type="maintenance_mode/update_config", panel_access={hass_read_only_user.id: "admin"})
-    assert not r["success"] and "pas toi-même" in r["error"]["message"]
+    assert not r["success"] and r["error"]["translation_key"] == "cannot_grant"
     assert m.config["panel_access"][hass_read_only_user.id] == ids["Gestion accès"]
 
 

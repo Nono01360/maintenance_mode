@@ -105,6 +105,25 @@ const T = {
     s_banner: "Notification dans l'interface", banner_mode: "Affichage",
     banner_bar: "Bandeau en haut de toute la page", banner_card: "Petite carte en haut à droite",
     banner_scroll: "Faire défiler le texte s'il dépasse la fenêtre",
+    err_no_current: "Aucune maintenance en cours.",
+    err_end_overlaps_scheduled: "La fin chevauche une maintenance planifiée.",
+    err_max_windows: "Maximum {max} maintenances planifiées.",
+    err_not_loaded: "L'intégration Mode maintenance n'est pas chargée.",
+    err_end_or_duration: "Indique soit `end`, soit `duration`, pas les deux.",
+    err_history_not_found: "Entrée d'historique introuvable.",
+    err_cannot_grant: "Tu ne peux pas accorder des droits que tu n'as pas toi-même.",
+    err_window_not_found: "Maintenance introuvable.",
+    err_reason_too_long: "Motif trop long ({max} caractères max).",
+    err_invalid_repeat: "Répétition invalide.",
+    err_repeat_needs_end: "Une maintenance répétée doit avoir une fin.",
+    err_duration_exceeds_period: "La durée dépasse la période de répétition.",
+    err_end_in_past: "La fin doit être dans le futur.",
+    err_start_in_past: "Le début doit être dans le futur.",
+    err_end_before_start: "La fin doit être postérieure au début.",
+    err_overlaps_scheduled: "Cette période chevauche une autre maintenance planifiée.",
+    err_overlaps_current: "Cette période chevauche la maintenance en cours.",
+    err_too_many_pages: "Maximum {max} pages par maintenance.",
+    err_access_denied: "Accès refusé.",
     banner_hint: "Sans défilement, le texte passe à la ligne (avec un ascenseur s'il est très long). Le bandeau repousse l'interface vers le bas ; en cas de problème d'affichage, choisis la petite carte.",
     s_compat: "Compatibilité", compat_mode: "Mode compatibilité : ne rien modifier dans la structure de Home Assistant",
     compat_hint: "Désactive le décalage de la page et le masquage de l'entrée de menu (la petite carte remplace le bandeau). À utiliser si l'affichage de Home Assistant est cassé après une mise à jour.",
@@ -172,6 +191,25 @@ const T = {
     s_banner: "In-app notification", banner_mode: "Display",
     banner_bar: "Banner across the top of the whole page", banner_card: "Small card at the top right",
     banner_scroll: "Scroll the text when it does not fit the window",
+    err_no_current: "No maintenance in progress.",
+    err_end_overlaps_scheduled: "The end overlaps a scheduled maintenance.",
+    err_max_windows: "Maximum {max} scheduled maintenances.",
+    err_not_loaded: "The Maintenance mode integration is not loaded.",
+    err_end_or_duration: "Provide either `end` or `duration`, not both.",
+    err_history_not_found: "History entry not found.",
+    err_cannot_grant: "You cannot grant permissions you do not have yourself.",
+    err_window_not_found: "Maintenance not found.",
+    err_reason_too_long: "Reason too long ({max} characters max).",
+    err_invalid_repeat: "Invalid repeat.",
+    err_repeat_needs_end: "A repeating maintenance must have an end.",
+    err_duration_exceeds_period: "The duration exceeds the repeat period.",
+    err_end_in_past: "The end must be in the future.",
+    err_start_in_past: "The start must be in the future.",
+    err_end_before_start: "The end must be after the start.",
+    err_overlaps_scheduled: "This period overlaps another scheduled maintenance.",
+    err_overlaps_current: "This period overlaps the current maintenance.",
+    err_too_many_pages: "Maximum {max} pages per maintenance.",
+    err_access_denied: "Access denied.",
     banner_hint: "Without scrolling, the text wraps (with a scrollbar if very long). The banner pushes the interface down; if the display looks wrong, choose the small card.",
     s_compat: "Compatibility", compat_mode: "Compatibility mode: do not modify Home Assistant's page structure",
     compat_hint: "Turns off the page offset and the hiding of the menu entry (the small card replaces the banner). Use it if the Home Assistant display breaks after an update.",
@@ -381,6 +419,13 @@ class MaintenanceModePanel extends HTMLElement {
     this._render();
   }
 
+  // Erreur du serveur : traduite d'après son code stable (`translation_key`), sinon le texte reçu
+  _errText(err) {
+    const key = err?.translation_key;
+    if (key && T[this._code()][`err_${key}`]) return this._t(`err_${key}`, err.translation_placeholders || {});
+    return err?.message || String(err);
+  }
+
   async _call(type, payload = {}) {
     this._error = "";
     try {
@@ -388,7 +433,7 @@ class MaintenanceModePanel extends HTMLElement {
       if (res && res.role) this._onData(res);
       return true;
     } catch (err) {
-      this._error = err?.message || String(err);
+      this._error = this._errText(err);
       this._render(true);
       return false;
     }

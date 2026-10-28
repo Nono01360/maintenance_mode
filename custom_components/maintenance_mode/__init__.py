@@ -14,7 +14,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.storage import Store
 
-from . import services, websocket_api
+from . import errors, services, websocket_api
 from .const import (
     DOMAIN,
     OVERLAY_JS,
@@ -54,6 +54,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not (entity.unique_id or "").endswith(_KEPT_SUFFIXES):
             registry.async_remove(entity.entity_id)
 
+    errors.set_language(hass.config.language)   # langue des messages côté serveur
     manager = MaintenanceManager(hass, entry)
     await manager.async_load()
     entry.runtime_data = manager

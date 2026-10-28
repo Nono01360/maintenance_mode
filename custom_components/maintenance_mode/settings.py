@@ -5,9 +5,9 @@ import re
 from typing import Any
 from datetime import timedelta
 
-from homeassistant.exceptions import ServiceValidationError
 from homeassistant.util import dt as dt_util
 
+from .errors import MaintenanceError
 from .const import BANNER_MODES, DEFAULT_MESSAGE, FORBIDDEN_NOTIFY, NOTIFY_KINDS
 from .window import parse_iso
 
@@ -23,7 +23,7 @@ class SettingsMixin:
         async with self._lock:
             kept = [h for h in self.history if h.get("hid") != history_id]
             if len(kept) == len(self.history):
-                raise ServiceValidationError("Entrée d'historique introuvable.")
+                raise MaintenanceError("history_not_found")
             self.history = kept
             await self._commit()
 
@@ -90,9 +90,7 @@ class SettingsMixin:
                     old = {r["id"]: r for r in cfg["roles"]}
                     for role in roles:
                         if old.get(role["id"]) != role and not set(role["permissions"]) <= actor_perms:
-                            raise ServiceValidationError(
-                                "Tu ne peux pas accorder des droits que tu n'as pas toi-même."
-                            )
+                            raise MaintenanceError("cannot_grant")
             access = dict(cfg["panel_access"])
             if "panel_access" in changes:
                 access = {
@@ -103,9 +101,7 @@ class SettingsMixin:
                 if actor_perms is not None:
                     for uid, rid in access.items():
                         if cfg["panel_access"].get(uid) != rid and not self.role_perms(rid, roles) <= actor_perms:
-                            raise ServiceValidationError(
-                                "Tu ne peux pas accorder des droits que tu n'as pas toi-même."
-                            )
+                            raise MaintenanceError("cannot_grant")
             # un rôle supprimé : ses utilisateurs retombent sur le rôle par défaut
             cfg["panel_access"] = {u: r for u, r in access.items() if self.role_exists(r, roles)}
             cfg["roles"] = roles

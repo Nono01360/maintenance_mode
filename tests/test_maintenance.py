@@ -184,7 +184,7 @@ async def test_ws_roles(hass, hass_ws_client, hass_access_token, hass_admin_user
     # erreur de validation remontée proprement
     await client.send_json({"id": 3, "type": "maintenance_mode/add_window", "start": start, "end": end})
     res = await client.receive_json()
-    assert not res["success"] and "chevauche" in res["error"]["message"]
+    assert not res["success"] and res["error"]["translation_key"] == "overlaps_scheduled"
 
     # on retire les droits admin à cet utilisateur -> vue utilisateur
     await m.async_update_config({"panel_access": {hass_admin_user.id: "viewer"}})
@@ -261,7 +261,7 @@ async def test_ws_update_and_delete_window(hass, hass_ws_client, hass_access_tok
 
     await client.send_json({"id": 4, "type": "maintenance_mode/delete_window", "window_id": "inconnu"})
     res = await client.receive_json()
-    assert not res["success"] and "introuvable" in res["error"]["message"]
+    assert not res["success"] and res["error"]["translation_key"] == "window_not_found"
 
 
 async def test_panel_hidden_attribute(hass, hass_admin_user, hass_owner_user):

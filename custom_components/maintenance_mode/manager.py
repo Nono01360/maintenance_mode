@@ -10,7 +10,6 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
@@ -28,6 +27,7 @@ from .window import (
     clean_pages,
     overlap,
 )
+from .errors import MaintenanceError
 from .const import (
     DOMAIN,
     MAX_WINDOWS,
@@ -129,12 +129,12 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
     ) -> None:
         async with self._lock:
             if not self.current:
-                raise ServiceValidationError("Aucune maintenance en cours.")
+                raise MaintenanceError("no_current")
             end = self._check_end(end)
             if end:
                 for w in self.schedule:
                     if overlap(self.current.start, end, w.start, w.end):
-                        raise ServiceValidationError("La fin chevauche une maintenance planifiée.")
+                        raise MaintenanceError("end_overlaps_scheduled")
             self.current.end = end
             self.current.reason = self._check_reason(reason)
             self.current.pages = clean_pages(pages)
@@ -152,7 +152,7 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
     ) -> Window:
         async with self._lock:
             if len(self.schedule) >= MAX_WINDOWS:
-                raise ServiceValidationError(f"Maximum {MAX_WINDOWS} maintenances planifiées.")
+                raise MaintenanceError("max_windows", max=MAX_WINDOWS)
             start, end = self._check_window(start, end, ignore_id=None)
             window = Window(
                 id=uuid.uuid4().hex[:8],

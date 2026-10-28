@@ -5,9 +5,9 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from homeassistant.exceptions import ServiceValidationError
 from homeassistant.util import dt as dt_util
 
+from .errors import MaintenanceError
 from .const import MAX_REASON, MAX_TEMPLATES, REPEATS
 from .window import Window, clean_pages, overlap, shift
 
@@ -19,25 +19,25 @@ class ValidationMixin:
         for window in self.schedule:
             if window.id == window_id:
                 return window
-        raise ServiceValidationError("Maintenance introuvable.")
+        raise MaintenanceError("window_not_found")
 
     @staticmethod
     def _check_reason(reason: str) -> str:
         reason = (reason or "").strip()
         if len(reason) > MAX_REASON:
-            raise ServiceValidationError(f"Motif trop long ({MAX_REASON} caractères max).")
+            raise MaintenanceError("reason_too_long", max=MAX_REASON)
         return reason
 
     @staticmethod
     def _check_repeat(repeat: str, start: datetime, end: datetime | None) -> str:
         if repeat not in REPEATS:
-            raise ServiceValidationError("Répétition invalide.")
+            raise MaintenanceError("invalid_repeat")
         if repeat != "none" and end is None:
-            raise ServiceValidationError("Une maintenance répétée doit avoir une fin.")
+            raise MaintenanceError("repeat_needs_end")
         if repeat != "none" and end is not None:
             next_start, _ = shift(start, end, repeat)
             if end > next_start:
-                raise ServiceValidationError("La durée dépasse la période de répétition.")
+                raise MaintenanceError("duration_exceeds_period")
         return repeat
 
     @staticmethod
@@ -46,21 +46,21 @@ class ValidationMixin:
             return None
         end = dt_util.as_utc(end)
         if end <= dt_util.utcnow():
-            raise ServiceValidationError("La fin doit être dans le futur.")
+            raise MaintenanceError("end_in_past")
         return end
 
     def _check_window(self, start, end, *, ignore_id):
         start = dt_util.as_utc(start)
         end = dt_util.as_utc(end) if end else None
         if start <= dt_util.utcnow():
-            raise ServiceValidationError("Le début doit être dans le futur.")
+            raise MaintenanceError("start_in_past")
         if end is not None and end <= start:
-            raise ServiceValidationError("La fin doit être postérieure au début.")
+            raise MaintenanceError("end_before_start")
         for other in self.schedule:
             if other.id != ignore_id and overlap(start, end, other.start, other.end):
-                raise ServiceValidationError("Cette période chevauche une autre maintenance planifiée.")
+                raise MaintenanceError("overlaps_scheduled")
         if self.current and self.current.end and overlap(start, end, self.current.start, self.current.end):
-            raise ServiceValidationError("Cette période chevauche la maintenance en cours.")
+            raise MaintenanceError("overlaps_current")
         return start, end
 
     @staticmethod

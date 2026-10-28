@@ -108,6 +108,6 @@ async def test_ws_history_permissions(hass, hass_ws_client, hass_read_only_acces
     r = await _ws_call(user, 3, type="maintenance_mode/delete_history", history_id=hid)
     assert r["success"] and len(r["result"]["history"]) == 2 and hid not in [h["hid"] for h in r["result"]["history"]]
     r = await _ws_call(user, 4, type="maintenance_mode/delete_history", history_id="inconnu")
-    assert not r["success"] and "introuvable" in r["error"]["message"]
+    assert not r["success"] and r["error"]["translation_key"] == "history_not_found"
     r = await _ws_call(user, 5, type="maintenance_mode/clear_history")
     assert r["success"] and r["result"]["history"] == [] and m.history == []
