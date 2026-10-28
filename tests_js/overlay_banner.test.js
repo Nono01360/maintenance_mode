@@ -16,9 +16,20 @@ function env({ attrs = {}, state = "on", user = { id: "adm", is_owner: false }, 
   const base = { maintenance_mode_entity: true, exempt_users: ["adm"], message: "M", warn_minutes: 15, current: cur(), next: null,
     panel_hidden_for: [], banner_mode: "bar", banner_scroll: true };
   const ha = w.document.createElement("home-assistant");
-  const mkHass = (s, a, u = user) => ({ user: u, locale: { language: "fr" }, panels: { map: { url_path: "map", title: "map" } }, localize: (k) => (k === "panel.map" ? "Carte" : ""),
-    states: { "switch.m": { entity_id: "switch.m", state: s, attributes: { ...base, ...a } } },
-    callWS: async (m) => { wsCalls.push(m); if (m.type === "frontend/get_user_data") return { value: userData }; return null; } });
+  // Côté « serveur » : exempt_users / panel_hidden_for ne sont PLUS des attributs lisibles ; le navigateur
+  // demande ses propres droits (get_client) et ne voit qu'une empreinte (rights_rev).
+  const mkHass = (s, a, u = user) => {
+    const { exempt_users, panel_hidden_for, ...pub } = { ...base, ...a };
+    pub.rights_rev = JSON.stringify([exempt_users, panel_hidden_for]);
+    return { user: u, locale: { language: "fr" }, panels: { map: { url_path: "map", title: "map" } }, localize: (k) => (k === "panel.map" ? "Carte" : ""),
+      states: { "switch.m": { entity_id: "switch.m", state: s, attributes: pub } },
+      callWS: async (m) => {
+        wsCalls.push(m);
+        if (m.type === "maintenance_mode/get_client") return { exempt: !!u.is_owner || exempt_users.includes(u.id), panel_hidden: !u.is_owner && panel_hidden_for.includes(u.id) };
+        if (m.type === "frontend/get_user_data") return { value: userData };
+        return null;
+      } };
+  };
   ha.hass = mkHass(state, attrs);
   ha.style.setProperty("direction", "ltr");   // style posé par Home Assistant : doit survivre
   w.document.body.appendChild(ha);

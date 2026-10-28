@@ -82,8 +82,9 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
   automatisations pendant une maintenance, celles qui avaient été suspendues et qui seraient redevenues actives (par
   exemple une automatisation avec `initial_state: true`) sont remises en pause. On ne réapplique que la liste
   suspendue au démarrage de la maintenance : une automatisation créée pendant la maintenance n'est pas suspendue.
-- **Confidentialité** : le nom de la personne qui a lancé une maintenance n'apparaît ni dans les attributs des
-  entités (lisibles par tous) ni dans le panneau pour un simple lecteur ; il reste dans l'historique (autorisation
+- **Confidentialité** : les attributs de l'entité (lisibles par tous) ne contiennent aucun identifiant d'utilisateur ni
+  nom d'automatisation : chaque navigateur demande au serveur *ses propres* droits d'affichage. Le nom de la personne qui
+  a lancé une maintenance n'apparaît pas non plus dans le panneau pour un simple lecteur ; il reste dans l'historique (autorisation
   `history`) et dans les évènements du bus (réservés aux administrateurs).
 - L'état et le planning sont conservés après un redémarrage ; ce qui est arrivé à échéance pendant
   l'arrêt est rattrapé au démarrage.

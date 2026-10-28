@@ -11,9 +11,11 @@ function env({ state = "on", user = { id: "bob", is_owner: false }, attrs = {}, 
   const w = dom.window; w.scrollTo = () => {};
   const ha = w.document.createElement("home-assistant");
   const cur = { id: "c", start: new Date(Date.now() - 6e4).toISOString(), end: new Date(Date.now() + 36e5).toISOString(), reason: "R", pages: [], pause_automations: true };
-  const hass = { user, locale: { language: "fr" }, config: {}, panels: {}, localize: () => "", callWS: async () => null,
-    states: { "switch.m": { entity_id: "switch.m", state, attributes: { maintenance_mode_entity: true, exempt_users: ["adm"], panel_hidden_for: [],
-      current: state === "on" ? cur : null, next: null, banner_mode: "bar", banner_scroll: false, message: "M", ...attrs } } } };
+  const pubAttrs = { maintenance_mode_entity: true, rights_rev: "r1", current: state === "on" ? cur : null, next: null, banner_mode: "bar", banner_scroll: false, message: "M", ...attrs };
+  const hiddenFor = pubAttrs.panel_hidden_for || []; delete pubAttrs.panel_hidden_for;
+  const hass = { user, locale: { language: "fr" }, config: {}, panels: {}, localize: () => "",
+    callWS: async (m) => (m.type === "maintenance_mode/get_client" ? { exempt: user.id === "adm" || !!user.is_owner, panel_hidden: hiddenFor.includes(user.id) } : null),
+    states: { "switch.m": { entity_id: "switch.m", state, attributes: pubAttrs } } };
   const counter = { n: 0 };
   Object.defineProperty(ha, "hass", { get() { counter.n++; return hass; } });
   if (throwingShadow) Object.defineProperty(ha, "shadowRoot", { get() { throw new Error("structure inattendue"); } });
@@ -51,7 +53,7 @@ function env({ state = "on", user = { id: "bob", is_owner: false }, attrs = {}, 
   const idle = env({ state: "off", attrs: { current: null } });
   const busy = env({ state: "on", user: { id: "adm", is_owner: false } });       // exempté : bandeau affiché
   await sleep(4300);
-  ok(idle.counter.n <= 3, `au repos : au plus 3 lectures en 4,3 s (2 s d'intervalle)`, idle.counter.n);
+  ok(idle.counter.n <= 4, `au repos : au plus 4 lectures en 4,3 s (2 s d'intervalle + 1 réveil quand le serveur a répondu avec les droits)`, idle.counter.n);
   ok(busy.counter.n >= 4, `maintenance active : au moins 4 lectures en 4,3 s (1 s d'intervalle)`, busy.counter.n);
   ok(!!busy.q("maintenance-bar"), "le bandeau est bien affiché dans le cas « occupé »");
   idle.w.close(); busy.w.close();

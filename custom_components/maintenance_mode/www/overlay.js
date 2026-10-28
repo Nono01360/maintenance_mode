@@ -755,6 +755,29 @@
       { scroll: st.attributes.banner_scroll !== false, canOpen: false, openLabel: tx.open, closeLabel: tx.close });
   };
 
+  // ---------- droits d'affichage de l'utilisateur courant ----------
+  let rights = null;            // { exempt, panelHidden } ; null tant que le serveur n'a pas répondu
+  let rightsRev = null;         // empreinte (attribut `rights_rev`) pour laquelle `rights` est valable
+  let rightsPending = false;
+  let rightsRetryAt = 0;
+
+  const rightsFor = (hass, st) => {
+    if (hass.user.is_owner) return { exempt: true, panelHidden: false };   // connu localement
+    const rev = String(st.attributes.rights_rev ?? "");
+    if ((rights === null || rightsRev !== rev) && !rightsPending && Date.now() >= rightsRetryAt) {
+      rightsPending = true;
+      hass.callWS({ type: "maintenance_mode/get_client" })
+        .then((r) => { rights = { exempt: !!r?.exempt, panelHidden: !!r?.panel_hidden }; rightsRev = rev; })
+        .catch((err) => {
+          // échec : par prudence l'utilisateur est traité comme non exempté ; on réessaie dans quelques secondes
+          console.debug("maintenance_mode: droits d'affichage non obtenus", err);
+          rights = { exempt: false, panelHidden: false }; rightsRev = null; rightsRetryAt = Date.now() + 5000;
+        })
+        .finally(() => { rightsPending = false; wake(); });
+    }
+    return rights;
+  };
+
   // ---------- boucle principale ----------
   // Chaque étape est isolée : une erreur (structure de Home Assistant qui change, DOM inattendu…)
   // n'empêche JAMAIS les autres, en particulier l'affichage du blocage, qui passe en premier.
@@ -785,8 +808,12 @@
 
     const now = new Date();
     const cur = safe("lecture de la maintenance", () => parseWin(st.attributes.current));
-    const exempt = hass.user.is_owner || (st.attributes.exempt_users || []).includes(hass.user.id);
-    const panelHidden = !hass.user.is_owner && (st.attributes.panel_hidden_for || []).includes(hass.user.id);
+    // Droits d'affichage : chaque navigateur demande au serveur SES droits (aucun identifiant n'est lisible
+    // dans les attributs de l'entité). Tant que la réponse n'est pas là, on n'affiche rien.
+    const rts = safe("droits d'affichage", () => rightsFor(hass, st));
+    if (!rts) return true;
+    const exempt = rts.exempt;
+    const panelHidden = rts.panelHidden;
     const barMode = st.attributes.banner_mode !== "card";   // « bar » par défaut
     const on = st.state === "on";
     const blocked = !!(on && cur && !exempt && safe("pages bloquées", () => pageBlocked(cur.pages)) !== false);

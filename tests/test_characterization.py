@@ -328,12 +328,12 @@ async def test_history_entries_without_id_get_one_on_load(hass, hass_storage):
     assert entry.runtime_data.history[0]["hid"]
 
 
-# ------------------------------------------------------------------ attributs publics (état 0.6.9, à réduire en 0.7)
+# ------------------------------------------------------------------ attributs publics (0.7.10 : plus aucun identifiant d'utilisateur ni nom d'automatisation)
 async def test_public_attributes_snapshot(hass):
     """Fige la liste des attributs lisibles par tous. 0.7 (confidentialité) la fera évoluer volontairement."""
     _, m = await _setup(hass)
     attrs = hass.states.get("switch.mode_maintenance").attributes
     assert set(attrs) - {"friendly_name", "icon"} == {
-        "maintenance_mode_entity", "exempt_users", "panel_hidden_for", "message", "banner_mode", "banner_scroll",
-        "warn_minutes", "current", "next", "scheduled_count", "disabled_automations",
+        "maintenance_mode_entity", "rights_rev", "message", "banner_mode", "banner_scroll",
+        "warn_minutes", "current", "next", "scheduled_count",
     }

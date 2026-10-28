@@ -13,8 +13,8 @@ async function run(mode) {
   // fin prévue dans 3 jours à 14:30 UTC => 16:30 à Paris (été) / 10:30 à New York
   const end = new Date(Date.UTC(2030, 6, 10, 14, 30)).toISOString();
   const cur = { id: "c", start: new Date(Date.now() - 6e4).toISOString(), end, reason: "", pages: [], pause_automations: true };
-  ha.hass = { user: { id: "adm", is_owner: false }, locale: { language: "fr", time_zone: mode }, config: { time_zone: "Europe/Paris" }, panels: {}, localize: () => "",
-    states: { "switch.m": { entity_id: "switch.m", state: "on", attributes: { maintenance_mode_entity: true, exempt_users: ["adm"], current: cur, next: null, banner_mode: "bar", banner_scroll: false, panel_hidden_for: [], message: "" } } } };
+  ha.hass = { user: { id: "adm", is_owner: false }, locale: { language: "fr", time_zone: mode }, config: { time_zone: "Europe/Paris" }, callWS: async () => ({ exempt: true, panel_hidden: false }), panels: {}, localize: () => "",
+    states: { "switch.m": { entity_id: "switch.m", state: "on", attributes: { maintenance_mode_entity: true, rights_rev: "r1", current: cur, next: null, banner_mode: "bar", banner_scroll: false, message: "" } } } };
   w.document.body.appendChild(ha);
   const hsr = ha.attachShadow({ mode: "open" }); hsr.appendChild(w.document.createElement("home-assistant-main"));
   w.eval(SRC); await sleep(1200);

@@ -1,6 +1,8 @@
 """Rôles et autorisations : qui voit et peut faire quoi, et vue d'état filtrée pour le panneau."""
 from __future__ import annotations
 
+import hashlib
+import json
 import uuid
 from typing import Any
 
@@ -29,6 +31,20 @@ class AccessMixin:
     def exempt_users(self) -> list[str]:
         """Utilisateurs jamais bloqués : exemptés choisis + propriétaire(s)."""
         return sorted({*self.config["allowed_users"], *self.owner_ids})
+
+    def client_rights(self, user: Any) -> dict[str, bool]:
+        """Ce que le navigateur de CET utilisateur a besoin de savoir (jamais celui des autres)."""
+        return {
+            "exempt": bool(user.is_owner or user.id in self.config["allowed_users"]),
+            "panel_hidden": bool(not user.is_owner and "view" not in self.perms_for(user)),
+        }
+
+    @property
+    def rights_revision(self) -> str:
+        """Empreinte (sans identifiant lisible) de ce qui détermine les droits d'affichage : le navigateur ne
+        redemande les siens au serveur que lorsqu'elle change."""
+        raw = json.dumps([self.exempt_users, self.hidden_panel_users], sort_keys=True)
+        return hashlib.sha256(raw.encode()).hexdigest()[:10]
 
     @property
     def hidden_panel_users(self) -> list[str]:

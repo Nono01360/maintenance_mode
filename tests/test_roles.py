@@ -53,11 +53,9 @@ async def test_panel_hidden_for_roles_without_view(hass, hass_read_only_user, ha
     await m.async_update_config({"roles": [{"name": "Rien", "permissions": []}, {"name": "Lecture", "permissions": ["history"]}]})
     rien, lecture = _role_id(m, "Rien"), _role_id(m, "Lecture")
     await m.async_update_config({"panel_access": {hass_read_only_user.id: rien, hass_admin_user.id: "none"}})
-    attrs = hass.states.get("switch.mode_maintenance").attributes
-    assert set(attrs["panel_hidden_for"]) == {hass_read_only_user.id, hass_admin_user.id}
+    assert set(m.hidden_panel_users) == {hass_read_only_user.id, hass_admin_user.id}
     await m.async_update_config({"panel_access": {hass_read_only_user.id: lecture, hass_admin_user.id: "none"}})
-    attrs = hass.states.get("switch.mode_maintenance").attributes
-    assert attrs["panel_hidden_for"] == [hass_admin_user.id]  # « Lecture » inclut « view »
+    assert m.hidden_panel_users == [hass_admin_user.id]  # « Lecture » inclut « view »
 
 
 async def test_state_is_filtered_by_permissions(hass, hass_read_only_user):

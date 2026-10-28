@@ -121,11 +121,11 @@ async def test_schedule_fires_and_ends(hass, freezer):
 
 async def test_exempt_users_default_is_owner_only(hass, hass_owner_user, hass_admin_user):
     _, m = await _setup(hass)
-    attrs = hass.states.get("switch.mode_maintenance").attributes
-    assert attrs["exempt_users"] == [hass_owner_user.id]
+    assert m.exempt_users == [hass_owner_user.id]
+    assert m.client_rights(hass_admin_user)["exempt"] is False
     await m.async_update_config({"allowed_users": [hass_admin_user.id]})
-    attrs = hass.states.get("switch.mode_maintenance").attributes
-    assert set(attrs["exempt_users"]) == {hass_owner_user.id, hass_admin_user.id}
+    assert set(m.exempt_users) == {hass_owner_user.id, hass_admin_user.id}
+    assert m.client_rights(hass_admin_user)["exempt"] is True and m.client_rights(hass_owner_user)["exempt"] is True
 
 
 async def test_persistence_across_reload(hass):
@@ -266,9 +266,8 @@ async def test_ws_update_and_delete_window(hass, hass_ws_client, hass_access_tok
 
 async def test_panel_hidden_attribute(hass, hass_admin_user, hass_owner_user):
     _, m = await _setup(hass)
-    attrs = hass.states.get("switch.mode_maintenance").attributes
-    assert attrs["panel_hidden_for"] == []
+    assert m.hidden_panel_users == []
     await m.async_update_config({"panel_access": {hass_admin_user.id: "none", hass_owner_user.id: "none"}})
-    attrs = hass.states.get("switch.mode_maintenance").attributes
     # le propriétaire garde toujours la vue administrateur
-    assert attrs["panel_hidden_for"] == [hass_admin_user.id]
+    assert m.hidden_panel_users == [hass_admin_user.id]
+    assert m.client_rights(hass_admin_user)["panel_hidden"] is True and m.client_rights(hass_owner_user)["panel_hidden"] is False

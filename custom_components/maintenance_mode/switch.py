@@ -37,8 +37,9 @@ class MaintenanceSwitch(MaintenanceEntity, SwitchEntity):
         return {
             # Marqueur lu par le frontend : retrouve l'entité même renommée.
             "maintenance_mode_entity": True,
-            "exempt_users": m.exempt_users,
-            "panel_hidden_for": m.hidden_panel_users,
+            # aucun identifiant d'utilisateur ici (lisible par tous) : chaque navigateur demande SES droits au
+            # serveur (`maintenance_mode/get_client`) quand cette empreinte change
+            "rights_rev": m.rights_revision,
             "message": m.config["message"],
             "banner_mode": m.config["banner_mode"],
             "banner_scroll": m.config["banner_scroll"],
@@ -47,5 +48,4 @@ class MaintenanceSwitch(MaintenanceEntity, SwitchEntity):
             "current": m.current.as_dict(public=True) if m.current else None,
             "next": m.next_window.as_dict(public=True) if m.next_window else None,
             "scheduled_count": len(m.schedule),
-            "disabled_automations": list(m.disabled),
         }

@@ -70,6 +70,13 @@ async def ws_subscribe(hass, connection, msg, manager) -> None:
     return None
 
 
+@websocket_api.websocket_command({vol.Required("type"): "maintenance_mode/get_client"})
+@_command()
+async def ws_get_client(hass, connection, msg, manager) -> dict[str, bool]:
+    """Droits d'affichage de l'appelant (bandeau, blocage, entrée de menu), lui seul."""
+    return manager.client_rights(connection.user)
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "maintenance_mode/start",
@@ -257,6 +264,7 @@ async def ws_update_config(hass, connection, msg, manager) -> dict[str, Any]:
 
 COMMANDS = (
     ws_get_state,
+    ws_get_client,
     ws_subscribe,
     ws_start,
     ws_stop,
