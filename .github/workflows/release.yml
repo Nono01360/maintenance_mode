@@ -22,6 +22,6 @@ jobs:
           if [ "$TAG" != "$VERSION" ]; then
             echo "Le tag ($TAG) ne correspond pas à manifest.json ($VERSION)"; exit 1
           fi
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
