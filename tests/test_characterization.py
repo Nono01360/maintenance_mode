@@ -24,7 +24,7 @@ from custom_components.maintenance_mode.const import (
     MAX_TEMPLATES,
     MAX_WINDOWS,
 )
-from custom_components.maintenance_mode.manager import MaintenanceManager, Window
+from custom_components.maintenance_mode.manager import Window
 
 from .test_maintenance import _setup, _state
 

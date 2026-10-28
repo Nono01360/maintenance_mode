@@ -176,6 +176,8 @@ logger:
 
 ## Développement
 
+Voir [ARCHITECTURE.md](ARCHITECTURE.md) pour l'organisation du code ; `quality_scale.yaml` donne l'auto-évaluation qualité.
+
 ```bash
 # Python (banc de test de Home Assistant)
 pip install -r requirements_test.txt

@@ -179,7 +179,7 @@ async def test_ws_roles(hass, hass_ws_client, hass_access_token, hass_admin_user
     res = await client.receive_json()
     assert res["success"], res
     assert res["result"]["upcoming"][0]["pages"] == ["config/devices"]
-    wid = res["result"]["upcoming"][0]["id"]
+    res["result"]["upcoming"][0]["id"]
 
     # erreur de validation remontée proprement
     await client.send_json({"id": 3, "type": "maintenance_mode/add_window", "start": start, "end": end})

@@ -1,0 +1,61 @@
+# Auto-évaluation selon l'Integration Quality Scale de Home Assistant.
+# Les niveaux officiels ne concernent que les intégrations du cœur : ce fichier est une auto-évaluation,
+# pas une certification. Valeurs : done | todo | exempt (avec commentaire).
+# Dernière mise à jour : 0.7.15. Cible : Argent, puis Or.
+rules:
+  # --- Bronze ---
+  action-setup: done
+  appropriate-polling: {status: exempt, comment: "iot_class local_push, aucune interrogation"}
+  brands: done
+  common-modules: done
+  config-flow-test-coverage: todo
+  config-flow: done
+  dependency-transparency: {status: exempt, comment: "aucune dépendance externe"}
+  docs-actions: done
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: todo
+  entity-event-setup: done
+  entity-unique-id: done
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure: {status: exempt, comment: "aucun appareil ni service externe à joindre"}
+  test-before-setup: {status: exempt, comment: "aucun appareil ni service externe à joindre"}
+  unique-config-entry: done
+  # --- Argent ---
+  action-exceptions: done
+  config-entry-unloading: done
+  docs-configuration-parameters: done
+  docs-installation-parameters: done
+  entity-unavailable: {status: exempt, comment: "entités locales calculées, toujours disponibles"}
+  integration-owner: done
+  log-when-unavailable: {status: exempt, comment: "pas de source externe"}
+  parallel-updates: {status: exempt, comment: "push local, aucune requête"}
+  reauthentication-flow: {status: exempt, comment: "pas d'authentification"}
+  test-coverage: done   # seuil de 85 % imposé en CI
+  # --- Or ---
+  devices: done
+  diagnostics: done
+  discovery: {status: exempt, comment: "service logiciel, rien à découvrir"}
+  discovery-update-info: {status: exempt, comment: "idem"}
+  docs-data-update: done
+  docs-examples: done
+  docs-known-limitations: done
+  docs-supported-devices: {status: exempt, comment: "aucun appareil"}
+  docs-supported-functions: done
+  docs-troubleshooting: done
+  docs-use-cases: todo
+  dynamic-devices: {status: exempt, comment: "un seul appareil"}
+  entity-category: todo
+  entity-device-class: done
+  entity-disabled-by-default: {status: exempt, comment: "peu d'entités, toutes utiles"}
+  entity-translations: todo      # noms d'entités encore en dur (« Prochaine maintenance », « Planning »)
+  exception-translations: done   # codes d'erreur stables, catalogue fr / en (0.7.13)
+  icon-translations: todo
+  reconfiguration-flow: {status: exempt, comment: "aucun paramètre dans le flux de configuration"}
+  repair-issues: done
+  stale-devices: {status: exempt, comment: "un seul appareil"}
+  # --- Platine ---
+  async-dependency: {status: exempt, comment: "aucune dépendance"}
+  inject-websession: {status: exempt, comment: "aucune requête réseau"}
+  strict-typing: todo

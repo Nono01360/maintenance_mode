@@ -8,16 +8,14 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
-    MockConfigEntry,
     async_capture_events,
     async_fire_time_changed,
     async_mock_service,
 )
-from homeassistant.setup import async_setup_component
 
 from custom_components.maintenance_mode.const import DOMAIN
 
-from .test_maintenance import _setup, _state
+from .test_maintenance import _setup
 
 
 # ------------------------------------------------------------------ répétition

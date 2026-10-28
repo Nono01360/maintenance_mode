@@ -5,14 +5,43 @@ on:
   pull_request:
 
 jobs:
-  pytest:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: pip install -r requirements_test.txt
+      - run: pip install ruff bandit
+      - name: Analyse statique (erreurs de code, imports inutilisés)
+        run: ruff check --select F,E9 custom_components tests
+      - name: Analyse de sécurité du code
+        run: bandit -q -r custom_components -ll
+
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Version minimale de Home Assistant supportée (hacs.json : 2025.1.0)
+          - name: "HA minimale 2025.1"
+            python: "3.12"
+            requirements: "pytest-homeassistant-custom-component==0.13.205"
+          # Dernière version
+          - name: "HA dernière"
+            python: "3.13"
+            requirements: "pytest-homeassistant-custom-component"
+    name: pytest (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install "${{ matrix.requirements }}" pytest-cov
       - name: Installer le frontend de Home Assistant
         run: pip install $(python -c "import json,pathlib,homeassistant as h;print(' '.join(json.loads((pathlib.Path(h.__file__).parent/'components'/'frontend'/'manifest.json').read_text())['requirements']))")
-      - run: pytest tests -q
+      - name: Version de Home Assistant testée
+        run: python -c "import homeassistant.const as c;print(c.__version__)"
+      - name: Tests et couverture (seuil 85 %)
+        run: pytest tests -q --cov=custom_components/maintenance_mode --cov-report=term-missing --cov-fail-under=85
