@@ -76,3 +76,6 @@ EVENT_ENDED = f"{DOMAIN}_ended"
 # « notify.notify » est un alias hérité dont le comportement dépend de la plateforme qui l'enregistre
 # (aucun, un seul ou tous les appareils) : on le refuse, de même que « send_message » (service par entité).
 FORBIDDEN_NOTIFY = {"notify", "send_message"}
+
+# Limitation douce : au plus ce nombre de modifications de réglages par minute via le panneau
+CONFIG_WRITES_PER_MINUTE = 60

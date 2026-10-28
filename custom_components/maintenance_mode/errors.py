@@ -30,6 +30,7 @@ CATALOG: dict[str, dict[str, str]] = {
         "overlaps_current": "Cette période chevauche la maintenance en cours.",
         "too_many_pages": "Maximum {max} pages par maintenance.",
         "access_denied": "Accès refusé.",
+        "rate_limited": "Trop de modifications en peu de temps : réessaie dans quelques secondes.",
     },
     "en": {
         "no_current": "No maintenance in progress.",
@@ -51,6 +52,7 @@ CATALOG: dict[str, dict[str, str]] = {
         "overlaps_current": "This period overlaps the current maintenance.",
         "too_many_pages": "Maximum {max} pages per maintenance.",
         "access_denied": "Access denied.",
+        "rate_limited": "Too many changes in a short time: try again in a few seconds.",
     },
 }
 

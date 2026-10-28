@@ -12,13 +12,14 @@ from homeassistant.util import dt as dt_util
 
 from .errors import MaintenanceError
 from .const import DOMAIN, REPEATS
+from .limits import ID, PAGES, TEXT
 from .manager import MaintenanceManager, get_manager
 
 _COMMON = {
     vol.Optional("end"): cv.datetime,
     vol.Optional("duration"): cv.time_period,
-    vol.Optional("reason", default=""): cv.string,
-    vol.Optional("pages", default=[]): vol.All(cv.ensure_list, [cv.string]),
+    vol.Optional("reason", default=""): TEXT,
+    vol.Optional("pages", default=[]): vol.All(cv.ensure_list, PAGES),
     vol.Optional("pause_automations", default=True): cv.boolean,
 }
 START_SCHEMA = vol.Schema(_COMMON)
@@ -29,7 +30,7 @@ SCHEDULE_SCHEMA = vol.Schema(
         vol.Optional("repeat", default="none"): vol.In(REPEATS),
     }
 )
-CANCEL_SCHEMA = vol.Schema({vol.Required("window_id"): cv.string})
+CANCEL_SCHEMA = vol.Schema({vol.Required("window_id"): ID})
 CLEAR_HISTORY_SCHEMA = vol.Schema({vol.Optional("older_than"): cv.time_period})
 
 

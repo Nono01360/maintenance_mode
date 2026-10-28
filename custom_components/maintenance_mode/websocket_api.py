@@ -12,11 +12,11 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from . import errors
+from .limits import ID, MAX_ENTITIES, MAX_LIST, MAX_USERS, PAGES, TEXT, bounded_list
 from .const import DOMAIN, BANNER_MODES, NOTIFY_KINDS, PERMISSIONS, REPEATS, SIGNAL_STATE_UPDATED
 from .manager import get_manager
 
 DATETIME = vol.Any(None, cv.datetime)
-PAGES = [cv.string]
 # NB : le champ « id » est réservé au numéro de message websocket -> « window_id ».
 
 
@@ -94,7 +94,7 @@ async def ws_get_client(hass, connection, msg, manager) -> dict[str, bool]:
     {
         vol.Required("type"): "maintenance_mode/start",
         vol.Optional("end"): DATETIME,
-        vol.Optional("reason", default=""): cv.string,
+        vol.Optional("reason", default=""): TEXT,
         vol.Optional("pages", default=[]): PAGES,
         vol.Optional("pause_automations", default=True): cv.boolean,
     }
@@ -122,7 +122,7 @@ async def ws_stop(hass, connection, msg, manager) -> dict[str, Any]:
     {
         vol.Required("type"): "maintenance_mode/update_current",
         vol.Optional("end"): DATETIME,
-        vol.Optional("reason", default=""): cv.string,
+        vol.Optional("reason", default=""): TEXT,
         vol.Optional("pages", default=[]): PAGES,
     }
 )
@@ -137,7 +137,7 @@ async def ws_update_current(hass, connection, msg, manager) -> dict[str, Any]:
 _WINDOW_FIELDS = {
     vol.Required("start"): cv.datetime,
     vol.Optional("end"): DATETIME,
-    vol.Optional("reason", default=""): cv.string,
+    vol.Optional("reason", default=""): TEXT,
     vol.Optional("pages", default=[]): PAGES,
     vol.Optional("pause_automations", default=True): cv.boolean,
     vol.Optional("repeat", default="none"): vol.In(REPEATS),
@@ -163,7 +163,7 @@ async def ws_add_window(hass, connection, msg, manager) -> dict[str, Any]:
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "maintenance_mode/update_window",
-        vol.Required("window_id"): cv.string,
+        vol.Required("window_id"): ID,
         **_WINDOW_FIELDS,
     }
 )
@@ -184,7 +184,7 @@ async def ws_update_window(hass, connection, msg, manager) -> dict[str, Any]:
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "maintenance_mode/delete_window",
-        vol.Required("window_id"): cv.string,
+        vol.Required("window_id"): ID,
     }
 )
 @_command("schedule")
@@ -196,7 +196,7 @@ async def ws_delete_window(hass, connection, msg, manager) -> dict[str, Any]:
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "maintenance_mode/delete_history",
-        vol.Required("history_id"): cv.string,  # (« id » est réservé au numéro de message)
+        vol.Required("history_id"): ID,  # (« id » est réservé au numéro de message)
     }
 )
 @_command("history_delete")
@@ -214,9 +214,9 @@ async def ws_clear_history(hass, connection, msg, manager) -> dict[str, Any]:
 
 _TEMPLATE = vol.Schema(
     {
-        vol.Optional("id"): cv.string,
-        vol.Required("name"): cv.string,
-        vol.Optional("reason", default=""): cv.string,
+        vol.Optional("id"): ID,
+        vol.Required("name"): TEXT,
+        vol.Optional("reason", default=""): TEXT,
         vol.Optional("pages", default=[]): PAGES,
         vol.Optional("pause_automations", default=True): cv.boolean,
         vol.Optional("duration"): vol.Any(None, vol.All(vol.Coerce(int), vol.Range(min=1, max=525600))),
@@ -225,9 +225,9 @@ _TEMPLATE = vol.Schema(
 )
 _ROLE = vol.Schema(
     {
-        vol.Optional("id"): cv.string,
-        vol.Required("name"): cv.string,
-        vol.Optional("permissions", default=[]): [vol.In(PERMISSIONS)],
+        vol.Optional("id"): ID,
+        vol.Required("name"): TEXT,
+        vol.Optional("permissions", default=[]): bounded_list(vol.In(PERMISSIONS), len(PERMISSIONS)),
     }
 )
 
@@ -252,19 +252,19 @@ _CONFIG_PERMS = {
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "maintenance_mode/update_config",
-        vol.Optional("automations"): [cv.string],
-        vol.Optional("allowed_users"): [cv.string],
+        vol.Optional("automations"): bounded_list(vol.All(cv.string, vol.Length(max=255)), MAX_ENTITIES),
+        vol.Optional("allowed_users"): bounded_list(ID, MAX_USERS),
         vol.Optional("warn_minutes"): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
         vol.Optional("end_soon_minutes"): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
-        vol.Optional("message"): cv.string,
-        vol.Optional("notify_services"): [cv.string],
-        vol.Optional("notify_kinds"): [vol.In(NOTIFY_KINDS)],
+        vol.Optional("message"): TEXT,
+        vol.Optional("notify_services"): bounded_list(vol.All(cv.string, vol.Length(max=100)), MAX_LIST),
+        vol.Optional("notify_kinds"): bounded_list(vol.In(NOTIFY_KINDS), len(NOTIFY_KINDS)),
         vol.Optional("banner_mode"): vol.In(BANNER_MODES),
         vol.Optional("banner_scroll"): cv.boolean,
         vol.Optional("compat_mode"): cv.boolean,
-        vol.Optional("templates"): [_TEMPLATE],
-        vol.Optional("roles"): [_ROLE],
-        vol.Optional("panel_access"): {cv.string: cv.string},
+        vol.Optional("templates"): bounded_list(_TEMPLATE, MAX_LIST),
+        vol.Optional("roles"): bounded_list(_ROLE, MAX_LIST),
+        vol.Optional("panel_access"): vol.All({ID: ID}, vol.Length(max=MAX_USERS)),
     }
 )
 @_command()
@@ -273,6 +273,7 @@ async def ws_update_config(hass, connection, msg, manager) -> dict[str, Any]:
     perms = manager.perms_for(connection.user)
     if not {_CONFIG_PERMS[k] for k in changes} <= perms:
         raise Unauthorized
+    manager.check_config_rate()
     await manager.async_update_config(changes, actor_perms=perms)
     return manager.state_for(connection.user)
 

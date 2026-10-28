@@ -28,7 +28,9 @@ from .window import (
     overlap,
 )
 from .errors import MaintenanceError
+from .limits import RateLimiter
 from .const import (
+    CONFIG_WRITES_PER_MINUTE,
     DOMAIN,
     MAX_WINDOWS,
     SAVE_DELAY,
@@ -68,6 +70,7 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
         self._timer: CALLBACK_TYPE | None = None
         self._unsub_reload: CALLBACK_TYPE | None = None
         self._lock = asyncio.Lock()
+        self._config_limiter = RateLimiter(CONFIG_WRITES_PER_MINUTE, 60)
         self._unloaded = False
 
     # ------------------------------------------------------------------ chargement
@@ -91,6 +94,11 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
                 self._listeners.remove(update)
 
         return remove
+
+    def check_config_rate(self) -> None:
+        """Limitation douce : trop de modifications de réglages en une minute (boucle, script emballé…)."""
+        if not self._config_limiter.allow():
+            raise MaintenanceError("rate_limited")
 
     # ------------------------------------------------------------------ lecture
     @property
