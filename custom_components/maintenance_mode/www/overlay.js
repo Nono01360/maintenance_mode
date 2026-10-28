@@ -285,20 +285,6 @@
     return pages.some((p) => path === p || path.startsWith(p + "/"));
   };
 
-  // Largeur de la barre latérale (pour la laisser accessible si blocage partiel).
-  // Best-effort : dépend de la structure interne du frontend, repli sur 0.
-  const sidebarWidth = () => {
-    try {
-      const main = getHaEl()?.shadowRoot?.querySelector("home-assistant-main");
-      const sb =
-        main?.shadowRoot?.querySelector("ha-drawer ha-sidebar") ||
-        main?.shadowRoot?.querySelector("ha-sidebar");
-      const r = sb?.getBoundingClientRect();
-      if (r && r.left >= 0 && r.width > 0 && r.width < 500) return Math.round(r.right);
-    } catch (_) { /* ignore */ }
-    return 0;
-  };
-
   // Nom lisible d'un chemin de page ("config/devices" -> "Paramètres › Appareils")
   const pageLabel = (path, hass, lang, tx) => {
     const code = lang.split("-")[0];
@@ -313,73 +299,6 @@
     if (path === seg) return name;
     const rest = path.slice(seg.length + 1).replace(/[-_/]+/g, " ");
     return `${name} › ${rest.charAt(0).toUpperCase()}${rest.slice(1)}`;
-  };
-
-  // ---------- barre latérale : masquer l'entrée « Maintenance » ----------
-  // Deux mécanismes complémentaires :
-  //  1. masquage DOM de l'entrée (recherche récursive dans les shadow DOM, MutationObserver) ;
-  //  2. préférence native de l'utilisateur (« panneaux masqués » de la barre latérale).
-  const deepFind = (start, selector) => {
-    const queue = [start];
-    for (let i = 0; i < queue.length && i < 30000; i++) {
-      const node = queue[i];
-      if (node.matches && node.matches(selector)) return node;
-      if (node.shadowRoot) queue.push(node.shadowRoot);
-      for (const c of node.children || []) queue.push(c);
-    }
-    return null;
-  };
-
-  const isPanelItem = (node) => {
-    if (!node.getAttribute) return false;
-    if (node.getAttribute("data-panel") === PANEL_PATH) return true;
-    const href = node.getAttribute("href") || (typeof node.href === "string" ? node.href : "");
-    return !!href && new RegExp(`(^|/)${PANEL_PATH}/?$`).test(href.split(/[?#]/)[0]);
-  };
-
-  let sidebarEl = null;
-  let sidebarObserver = null;
-  let sidebarSearchAt = 0;
-  let wantHidden = false;
-  const hiddenEls = new Set();
-
-  const applySidebar = () => {
-    const root = sidebarEl?.shadowRoot;
-    if (!root) return;
-    if (!wantHidden) {
-      hiddenEls.forEach((n) => n.style.removeProperty("display"));
-      hiddenEls.clear();
-      return;
-    }
-    const queue = [...root.children];
-    for (let i = 0; i < queue.length && i < 5000; i++) {
-      const n = queue[i];
-      if (isPanelItem(n)) {            // l'élément le plus extérieur suffit
-        if (!hiddenEls.has(n)) { n.style.setProperty("display", "none", "important"); hiddenEls.add(n); }
-        continue;
-      }
-      if (n.shadowRoot) queue.push(...n.shadowRoot.children);
-      queue.push(...n.children);
-    }
-  };
-
-  const setPanelHidden = (hide) => {
-    wantHidden = hide;
-    if (!sidebarEl || !sidebarEl.isConnected) {
-      sidebarObserver?.disconnect();
-      sidebarObserver = null;
-      sidebarEl = null;
-      hiddenEls.clear();
-      if (!hide) return;
-      if (Date.now() - sidebarSearchAt < 3000) return;   // on ne fouille pas le DOM chaque seconde
-      sidebarSearchAt = Date.now();
-      sidebarEl = deepFind(getHaEl(), "ha-sidebar");
-      if (sidebarEl?.shadowRoot) {
-        sidebarObserver = new MutationObserver(() => applySidebar());
-        sidebarObserver.observe(sidebarEl.shadowRoot, { childList: true, subtree: true });
-      }
-    }
-    applySidebar();
   };
 
   let prefSynced = null;
@@ -406,6 +325,153 @@
       console.debug("maintenance_mode: préférence de barre latérale non modifiée", err);
     }
   };
+
+  // =====================================================================================================
+  // COMPAT — SEUL endroit qui touche à la structure interne du frontend de Home Assistant (éléments
+  // `home-assistant-main`, `ha-sidebar`, shadow DOM…). Tout le reste du fichier passe par `compat.*` ou par des
+  // interfaces documentées (états, événements, WebSocket). Si Home Assistant change sa structure, c'est ici — et
+  // seulement ici — qu'il faut intervenir ; `tests_js/compat_isolation.test.js` garde cette frontière.
+  // =====================================================================================================
+  const compat = (() => {
+    // Largeur de la barre latérale (pour la laisser accessible si blocage partiel).
+    // Best-effort : dépend de la structure interne du frontend, repli sur 0.
+    const sidebarWidth = () => {
+      try {
+        const main = getHaEl()?.shadowRoot?.querySelector("home-assistant-main");
+        const sb =
+          main?.shadowRoot?.querySelector("ha-drawer ha-sidebar") ||
+          main?.shadowRoot?.querySelector("ha-sidebar");
+        const r = sb?.getBoundingClientRect();
+        if (r && r.left >= 0 && r.width > 0 && r.width < 500) return Math.round(r.right);
+      } catch (_) { /* ignore */ }
+      return 0;
+    };
+
+    // ---------- barre latérale : masquer l'entrée « Maintenance » ----------
+    // Deux mécanismes complémentaires :
+    //  1. masquage DOM de l'entrée (recherche récursive dans les shadow DOM, MutationObserver) ;
+    //  2. préférence native de l'utilisateur (« panneaux masqués » de la barre latérale).
+    const deepFind = (start, selector) => {
+      const queue = [start];
+      for (let i = 0; i < queue.length && i < 30000; i++) {
+        const node = queue[i];
+        if (node.matches && node.matches(selector)) return node;
+        if (node.shadowRoot) queue.push(node.shadowRoot);
+        for (const c of node.children || []) queue.push(c);
+      }
+      return null;
+    };
+
+    const isPanelItem = (node) => {
+      if (!node.getAttribute) return false;
+      if (node.getAttribute("data-panel") === PANEL_PATH) return true;
+      const href = node.getAttribute("href") || (typeof node.href === "string" ? node.href : "");
+      return !!href && new RegExp(`(^|/)${PANEL_PATH}/?$`).test(href.split(/[?#]/)[0]);
+    };
+
+    let sidebarEl = null;
+    let sidebarObserver = null;
+    let sidebarSearchAt = 0;
+    let wantHidden = false;
+    const hiddenEls = new Set();
+
+    const applySidebar = () => {
+      const root = sidebarEl?.shadowRoot;
+      if (!root) return;
+      if (!wantHidden) {
+        hiddenEls.forEach((n) => n.style.removeProperty("display"));
+        hiddenEls.clear();
+        return;
+      }
+      const queue = [...root.children];
+      for (let i = 0; i < queue.length && i < 5000; i++) {
+        const n = queue[i];
+        if (isPanelItem(n)) {            // l'élément le plus extérieur suffit
+          if (!hiddenEls.has(n)) { n.style.setProperty("display", "none", "important"); hiddenEls.add(n); }
+          continue;
+        }
+        if (n.shadowRoot) queue.push(...n.shadowRoot.children);
+        queue.push(...n.children);
+      }
+    };
+
+    const setPanelHidden = (hide) => {
+      wantHidden = hide;
+      if (!sidebarEl || !sidebarEl.isConnected) {
+        sidebarObserver?.disconnect();
+        sidebarObserver = null;
+        sidebarEl = null;
+        hiddenEls.clear();
+        if (!hide) return;
+        if (Date.now() - sidebarSearchAt < 3000) return;   // on ne fouille pas le DOM chaque seconde
+        sidebarSearchAt = Date.now();
+        sidebarEl = deepFind(getHaEl(), "ha-sidebar");
+        if (sidebarEl?.shadowRoot) {
+          sidebarObserver = new MutationObserver(() => applySidebar());
+          sidebarObserver.observe(sidebarEl.shadowRoot, { childList: true, subtree: true });
+        }
+      }
+      applySidebar();
+    };
+
+    // Repousse toute l'interface Home Assistant sous le bandeau.
+    // 1. `home-assistant` est « display: inline » : `transform`/`height` y sont sans effet. On en fait
+    //    une boîte fixe qui occupe la fenêtre sous le bandeau ; le `transform` en fait aussi le repère
+    //    des éléments « fixed » (en-tête, menu latéral, dialogues), qui restent donc en place.
+    // 2. Home Assistant fait défiler le DOCUMENT : dans une boîte fixe, plus rien ne défile. On donne
+    //    donc le défilement à `home-assistant-main` (parent de tout le contenu). Les éléments « fixed »
+    //    ne sont pas concernés : leur repère est la boîte, pas ce conteneur.
+    // Si la structure n'est pas reconnue, on ne touche à rien (le bandeau reste affiché par-dessus).
+    const HA_PROPS = ["display", "position", "top", "right", "bottom", "left", "height", "transform", "overflow"];
+    const MAIN_PROPS = ["display", "height", "min-height", "max-height", "overflow"];
+    let pageLock = null;
+    let pushWarned = false;
+
+    const saveStyles = (node, props) => Object.fromEntries(props.map((p) => [p, node.style.getPropertyValue(p)]));
+    const restoreStyles = (node, saved) => {
+      for (const [p, v] of Object.entries(saved)) {
+        if (v) node.style.setProperty(p, v); else node.style.removeProperty(p);
+      }
+    };
+
+    const pushPage = (px) => {
+      const ha = getHaEl();
+      if (!ha) return;
+      const root = document.documentElement;
+      if (px > 0) {
+        let main = pageLock?.mainEl;
+        if (!main || !main.isConnected) main = deepFind(ha, "home-assistant-main");
+        if (!main) {
+          if (!pushWarned) { console.warn("maintenance_mode: structure de Home Assistant non reconnue, la page n'est pas décalée (choisis « petite carte » dans les paramètres)"); pushWarned = true; }
+          return;
+        }
+        if (!pageLock) {
+          pageLock = { ha: saveStyles(ha, HA_PROPS), mainEl: main, main: saveStyles(main, MAIN_PROPS), root: root.style.overflow };
+        }
+        const css = { display: "block", position: "fixed", top: `${px}px`, right: "0", bottom: "0", left: "0",
+          height: "auto", transform: "translateZ(0)", overflow: "hidden" };
+        for (const [k, v] of Object.entries(css)) ha.style.setProperty(k, v);
+        const mainCss = { display: "block", height: "100%", "min-height": "0", "max-height": "100%", overflow: "auto" };
+        for (const [k, v] of Object.entries(mainCss)) main.style.setProperty(k, v);
+        root.style.overflow = "hidden";
+        if (window.scrollY || root.scrollTop) window.scrollTo(0, 0);
+      } else if (pageLock) {
+        // on ne restaure que nos propriétés (Home Assistant en pose d'autres : direction, etc.)
+        restoreStyles(ha, pageLock.ha);
+        restoreStyles(pageLock.mainEl, pageLock.main);
+        root.style.overflow = pageLock.root;
+        pageLock = null;
+      }
+    };
+
+    return {
+      sidebarWidth,          // largeur de la barre latérale (px) ; 0 si inconnue
+      setPanelHidden,        // masque / réaffiche l'entrée « Maintenance » du menu
+      sidebarPending: () => wantHidden && !sidebarEl,   // vrai tant que le menu n'a pas encore été trouvé
+      pushPage,              // décale toute l'interface de `px` pixels vers le bas (0 = restaure)
+    };
+  })();
+  // ===================================================================================================== FIN COMPAT
 
   // ---------- recherche de l'entité (même renommée) ----------
   let entityId = null;
@@ -472,7 +538,7 @@
     if (overlay && overlay.partial !== partial) removeOverlay();
     if (!overlay) overlay = buildOverlay(partial);
     const { r, root } = overlay;
-    root.style.setProperty("--maint-left", partial ? `${sidebarWidth()}px` : "0px");
+    root.style.setProperty("--maint-left", partial ? `${compat.sidebarWidth()}px` : "0px");
     r.title.textContent = partial ? tx.pageTitle : tx.title;
     r.message.textContent = st.attributes.message || tx.defaultMessage;
     r.reason.textContent = cur.reason ? `${tx.reason} ${cur.reason}` : "";
@@ -596,61 +662,11 @@
 
   const reducedMotion = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-  // Repousse toute l'interface Home Assistant sous le bandeau.
-  // 1. `home-assistant` est « display: inline » : `transform`/`height` y sont sans effet. On en fait
-  //    une boîte fixe qui occupe la fenêtre sous le bandeau ; le `transform` en fait aussi le repère
-  //    des éléments « fixed » (en-tête, menu latéral, dialogues), qui restent donc en place.
-  // 2. Home Assistant fait défiler le DOCUMENT : dans une boîte fixe, plus rien ne défile. On donne
-  //    donc le défilement à `home-assistant-main` (parent de tout le contenu). Les éléments « fixed »
-  //    ne sont pas concernés : leur repère est la boîte, pas ce conteneur.
-  // Si la structure n'est pas reconnue, on ne touche à rien (le bandeau reste affiché par-dessus).
-  const HA_PROPS = ["display", "position", "top", "right", "bottom", "left", "height", "transform", "overflow"];
-  const MAIN_PROPS = ["display", "height", "min-height", "max-height", "overflow"];
-  let pageLock = null;
-  let pushWarned = false;
-
-  const saveStyles = (node, props) => Object.fromEntries(props.map((p) => [p, node.style.getPropertyValue(p)]));
-  const restoreStyles = (node, saved) => {
-    for (const [p, v] of Object.entries(saved)) {
-      if (v) node.style.setProperty(p, v); else node.style.removeProperty(p);
-    }
-  };
-
-  const pushPage = (px) => {
-    const ha = getHaEl();
-    if (!ha) return;
-    const root = document.documentElement;
-    if (px > 0) {
-      let main = pageLock?.mainEl;
-      if (!main || !main.isConnected) main = deepFind(ha, "home-assistant-main");
-      if (!main) {
-        if (!pushWarned) { console.warn("maintenance_mode: structure de Home Assistant non reconnue, la page n'est pas décalée (choisis « petite carte » dans les paramètres)"); pushWarned = true; }
-        return;
-      }
-      if (!pageLock) {
-        pageLock = { ha: saveStyles(ha, HA_PROPS), mainEl: main, main: saveStyles(main, MAIN_PROPS), root: root.style.overflow };
-      }
-      const css = { display: "block", position: "fixed", top: `${px}px`, right: "0", bottom: "0", left: "0",
-        height: "auto", transform: "translateZ(0)", overflow: "hidden" };
-      for (const [k, v] of Object.entries(css)) ha.style.setProperty(k, v);
-      const mainCss = { display: "block", height: "100%", "min-height": "0", "max-height": "100%", overflow: "auto" };
-      for (const [k, v] of Object.entries(mainCss)) main.style.setProperty(k, v);
-      root.style.overflow = "hidden";
-      if (window.scrollY || root.scrollTop) window.scrollTo(0, 0);
-    } else if (pageLock) {
-      // on ne restaure que nos propriétés (Home Assistant en pose d'autres : direction, etc.)
-      restoreStyles(ha, pageLock.ha);
-      restoreStyles(pageLock.mainEl, pageLock.main);
-      root.style.overflow = pageLock.root;
-      pageLock = null;
-    }
-  };
-
   // Mesure le bandeau et recale la page (appelé à chaque rendu ET quand sa taille change)
   const syncPush = () => {
     if (!bar) return;
     const h = Math.ceil(bar.root.getBoundingClientRect().height);
-    if (h !== bar.pushed) { pushPage(h); bar.pushed = h; }
+    if (h !== bar.pushed) { compat.pushPage(h); bar.pushed = h; }
     else if (window.scrollY) window.scrollTo(0, 0);   // le document ne doit pas avoir glissé
   };
 
@@ -692,7 +708,7 @@
     bar.ro?.disconnect();
     bar.root.remove();
     bar = null;
-    pushPage(0);
+    compat.pushPage(0);
   };
 
   const renderBar = (kind, key, text, o) => {
@@ -802,7 +818,7 @@
     const st = safe("recherche de l'entité", () => findState(hass));
     if (!st) {
       safe("nettoyage", () => { removeOverlay(); removeToast(); removeBanner(); removeBar(); });
-      safe("menu latéral", () => { setPanelHidden(false); syncSidebarPref(hass, false); });
+      safe("menu latéral", () => { compat.setPanelHidden(false); syncSidebarPref(hass, false); });
       return false;
     }
 
@@ -843,9 +859,9 @@
     }
 
     // 2. Confort : l'entrée du menu latéral pour les utilisateurs sans accès au panneau
-    safe("menu latéral", () => { setPanelHidden(panelHidden); syncSidebarPref(hass, panelHidden); });
+    safe("menu latéral", () => { compat.setPanelHidden(panelHidden); syncSidebarPref(hass, panelHidden); });
 
-    return on || !!(overlay || bar || toast || banner) || (panelHidden && !sidebarEl);
+    return on || !!(overlay || bar || toast || banner) || (panelHidden && compat.sidebarPending());
   };
 
   // ---------- cadence de la boucle ----------
