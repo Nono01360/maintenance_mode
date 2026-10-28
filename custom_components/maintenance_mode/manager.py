@@ -18,7 +18,7 @@ from homeassistant.util import dt as dt_util
 
 from .access import AccessMixin
 from .settings import SettingsMixin
-from .storage import STORAGE_VERSION, StorageMixin, default_config
+from .storage import STORAGE_VERSION, MaintenanceStore, StorageMixin, default_config
 from .planning import PlanningMixin
 from .validation import ValidationMixin
 from .suspension import SuspensionMixin
@@ -63,7 +63,7 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
         self.config: dict[str, Any] = default_config()
         self.users: list[dict[str, Any]] = []
         self.owner_ids: list[str] = []
-        self._store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
+        self._store: Store = MaintenanceStore(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         self._listeners: list[CALLBACK_TYPE] = []
         self._timer: CALLBACK_TYPE | None = None
         self._unsub_reload: CALLBACK_TYPE | None = None

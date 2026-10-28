@@ -14,6 +14,10 @@
     "missing_automations": {
       "title": "Maintenance mode: automations not found",
       "description": "These selected automations no longer exist: {entities}. Update the list in the \"Maintenance\" panel (Settings tab)."
+    },
+    "storage_unreadable": {
+      "title": "Maintenance mode: data partly unreadable",
+      "description": "The Maintenance mode data file contained unreadable items ({problems}). The integration started in safe mode with what could be read; a copy of the original is kept in the .storage folder (file ending in .unreadable). If a maintenance was running, check your automations."
     }
   },
   "selector": {

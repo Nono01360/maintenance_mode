@@ -14,6 +14,10 @@
     "missing_automations": {
       "title": "Automatisations introuvables dans le mode maintenance",
       "description": "Ces automatisations sélectionnées n'existent plus : {entities}. Mets à jour la liste dans le panneau « Maintenance » (onglet Paramètres)."
+    },
+    "storage_unreadable": {
+      "title": "Mode maintenance : données partiellement illisibles",
+      "description": "Le fichier de données de Mode maintenance contenait des éléments illisibles ({problems}). L'intégration a démarré en mode sûr avec ce qui était lisible ; une copie de l'original est conservée dans le dossier .storage (fichier se terminant par .unreadable). Si une maintenance était en cours, vérifie tes automatisations."
     }
   },
   "selector": {

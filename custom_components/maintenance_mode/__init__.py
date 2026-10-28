@@ -26,7 +26,7 @@ from .const import (
     VERSION,
 )
 from .manager import MaintenanceManager
-from .storage import STORAGE_VERSION
+from .storage import STORAGE_VERSION, MaintenanceStore
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -92,9 +92,17 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     qu'ELLE avait suspendues sont réactivées ; celles que l'utilisateur avait coupées lui-même ne sont
     pas touchées.
     """
-    store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
-    data = await store.async_load() or {}
+    store: Store = MaintenanceStore(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
+    try:
+        data = await store.async_load() or {}
+    except Exception:  # noqa: BLE001 - fichier plus récent ou illisible : on ne bloque jamais la suppression
+        _LOGGER.exception("Stockage illisible à la suppression : rien à réactiver")
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
     suspended = data.get("disabled") or []
+    if not (isinstance(suspended, list) and all(isinstance(x, str) for x in suspended)):
+        suspended = []
     if data.get("current") and suspended:
         try:
             await hass.services.async_call(
@@ -103,4 +111,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Impossible de réactiver les automatisations à la suppression")
     await store.async_remove()
-    ir.async_delete_issue(hass, DOMAIN, "missing_automations")
+    for suffix in ("backup_v1", "unreadable"):          # copies de sécurité de la migration / du mode sûr
+        await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.{suffix}").async_remove()
+    for issue in ("missing_automations", "storage_unreadable"):
+        ir.async_delete_issue(hass, DOMAIN, issue)

@@ -261,7 +261,7 @@ async def test_stored_format(hass, hass_storage):
     entry, m = await _setup(hass)
     await m.async_start_now(end=None, reason="r", pages=["map"], pause=True)
     stored = hass_storage[_key(entry)]
-    assert stored["version"] == 1
+    assert stored["version"] == 2
     assert set(stored["data"]) == {"config", "disabled", "current", "schedule", "history", "notified"}
     assert set(stored["data"]["config"]) == {
         "automations", "allowed_users", "warn_minutes", "message", "panel_access", "notify_services", "notify_kinds",
