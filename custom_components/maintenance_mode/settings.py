@@ -57,6 +57,9 @@ class SettingsMixin:
                 cfg["automations"] = sorted(
                     {e for e in changes["automations"] if isinstance(e, str) and e.startswith("automation.")}
                 )
+            for key in ("selected_labels", "selected_areas"):
+                if key in changes:
+                    cfg[key] = sorted({str(x) for x in changes[key] if x})[:MAX_EXCLUDED_LABELS]
             if "excluded_automations" in changes:
                 cfg["excluded_automations"] = sorted(
                     {e for e in changes["excluded_automations"] if isinstance(e, str) and e.startswith("automation.")}

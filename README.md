@@ -58,6 +58,10 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
   `config/devices`, …). Un chemin bloque aussi ses sous-pages.
 - **Automatisations** : si aucune n'est sélectionnée, **toutes** sont suspendues. Seules celles qui étaient
   actives sont réactivées à la fin.
+- **Sélecteurs** (Paramètres › Sélecteurs) : en plus des automatisations choisies une à une, on peut viser toutes celles qui
+  portent une **étiquette** ou qui sont dans une **zone** (la zone de l'entité, sinon celle de son appareil). La liste
+  est établie au démarrage de la maintenance (instantané) : une automatisation étiquetée plus tard n'est pas suspendue
+  en cours de route. Résultat = (choisies ∪ étiquettes ∪ zones) − protections.
 - **Protections** (Paramètres › Protections) : des automatisations, ou toutes celles portant une **étiquette**, ne sont
   **jamais** suspendues, même si elles sont sélectionnées ou si « toutes » sont visées. Une sélection qui contient une
   automatisation protégée est signalée dans les paramètres. Les étiquettes se règlent dans Home Assistant

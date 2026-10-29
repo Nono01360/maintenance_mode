@@ -74,6 +74,9 @@ const T = {
     s_warn: "Préavis de la notification (minutes avant le début)", s_autos: "Automatisations suspendues",
     s_autos_n: "{n} sélectionnée(s) : seules celles-ci sont coupées.",
     s_autos_all: "Aucune sélectionnée : <b>toutes</b> les automatisations sont coupées pendant la maintenance.",
+    s_autos_sel: "Aucune sélection individuelle : les étiquettes et zones choisies ci-dessous déterminent les automatisations coupées.",
+    s_select: "Sélecteurs", select_hint: "Viser toutes les automatisations portant une étiquette ou situées dans une zone, en plus de celles choisies ci-dessus. La liste est établie au démarrage de la maintenance ; les protections l'emportent.",
+    select_labels: "Étiquettes visées", select_areas: "Zones visées", select_none: "Aucune dans Home Assistant.",
     search: "Rechercher…", no_autos: "Aucune automatisation trouvée.", deselect_all: "Tout désélectionner",
     s_users: "Utilisateurs non impactés", s_users_some: "Ces utilisateurs (et le propriétaire) ne sont jamais bloqués.",
     s_users_none: "Aucun sélectionné : seul le propriétaire n'est pas impacté.",
@@ -164,6 +167,9 @@ const T = {
     s_warn: "Notification lead time (minutes before start)", s_autos: "Paused automations",
     s_autos_n: "{n} selected: only these are turned off.",
     s_autos_all: "None selected: <b>all</b> automations are turned off during maintenance.",
+    s_autos_sel: "No individual selection: the labels and areas chosen below determine which automations are turned off.",
+    s_select: "Selectors", select_hint: "Also target every automation that carries a label or sits in an area, in addition to those chosen above. The list is taken when the maintenance starts; protections always win.",
+    select_labels: "Targeted labels", select_areas: "Targeted areas", select_none: "None in Home Assistant.",
     search: "Search…", no_autos: "No automation found.", deselect_all: "Deselect all",
     s_users: "Unaffected users", s_users_some: "These users (and the owner) are never blocked.",
     s_users_none: "None selected: only the owner is unaffected.",
@@ -416,6 +422,8 @@ class MaintenanceModePanel extends HTMLElement {
         compat_mode: d.config.compat_mode === true,
         excluded_automations: [...(d.config.excluded_automations || [])],
         excluded_labels: [...(d.config.excluded_labels || [])],
+        selected_labels: [...(d.config.selected_labels || [])],
+        selected_areas: [...(d.config.selected_areas || [])],
         automations: [...d.config.automations],
         allowed_users: [...d.config.allowed_users],
         warn_minutes: d.config.warn_minutes,
@@ -782,7 +790,7 @@ class MaintenanceModePanel extends HTMLElement {
 
       <ha-card class="card"><div class="col">
         <div><h2>${this._t("s_autos")}</h2>
-          <div class="muted">${dr.automations.length ? this._t("s_autos_n", { n: dr.automations.length }) : this._t("s_autos_all")}</div></div>
+          <div class="muted">${dr.automations.length ? this._t("s_autos_n", { n: dr.automations.length }) : (dr.selected_labels.length || dr.selected_areas.length) ? this._t("s_autos_sel") : this._t("s_autos_all")}</div></div>
         <input type="text" placeholder="${esc(this._t("search"))}" data-field="auto-search" value="${esc(this._autoFilter)}">
         <div class="list">
           ${autos.length ? autos.map((a) => `<label class="check" data-filter="${esc((a.name + " " + a.id).toLowerCase())}"
@@ -809,6 +817,24 @@ class MaintenanceModePanel extends HTMLElement {
           ${autos.map((a) => `<label class="check">
             <input type="checkbox" data-action="toggle-excl-auto" data-id="${esc(a.id)}" ${dr.excluded_automations.includes(a.id) ? "checked" : ""}>
             <span class="grow">${esc(a.name)} <span class="muted">${esc(a.id)}</span></span></label>`).join("")}
+        </div>
+      </div></ha-card>
+
+      <ha-card class="card"><div class="col">
+        <div><h2>${this._t("s_select")}</h2><div class="muted">${this._t("select_hint")}</div></div>
+        <h3>${this._t("select_labels")}</h3>
+        <div class="list">
+          ${(this._catalog?.labels || []).length ? this._catalog.labels.map((l) => `<label class="check">
+            <input type="checkbox" data-action="toggle-sel-label" data-label="${esc(l.id)}" ${dr.selected_labels.includes(l.id) ? "checked" : ""}>
+            <span class="grow">${esc(l.name)} <span class="muted">${l.automations.length}</span></span></label>`).join("")
+            : `<div class="empty">${this._t("select_none")}</div>`}
+        </div>
+        <h3>${this._t("select_areas")}</h3>
+        <div class="list">
+          ${(this._catalog?.areas || []).length ? this._catalog.areas.map((a) => `<label class="check">
+            <input type="checkbox" data-action="toggle-sel-area" data-area="${esc(a.id)}" ${dr.selected_areas.includes(a.id) ? "checked" : ""}>
+            <span class="grow">${esc(a.name)} <span class="muted">${a.automations.length}</span></span></label>`).join("")
+            : `<div class="empty">${this._t("select_none")}</div>`}
         </div>
       </div></ha-card>
 
@@ -876,8 +902,8 @@ class MaintenanceModePanel extends HTMLElement {
     this._catalogLoading = true;
     try {
       const r = await this._hass.callWS({ type: "maintenance_mode/get_catalog" });
-      this._catalog = r && Array.isArray(r.labels) ? r : { labels: [] };
-    } catch (_) { this._catalog = { labels: [] }; }
+      this._catalog = r && Array.isArray(r.labels) ? { labels: r.labels, areas: Array.isArray(r.areas) ? r.areas : [] } : { labels: [], areas: [] };
+    } catch (_) { this._catalog = { labels: [], areas: [] }; }
     this._catalogLoading = false;
     this._render();
   }
@@ -1210,6 +1236,8 @@ async _act(action, target) {
         compat_mode: this._draft.compat_mode,
         excluded_automations: this._draft.excluded_automations,
         excluded_labels: this._draft.excluded_labels,
+        selected_labels: this._draft.selected_labels,
+        selected_areas: this._draft.selected_areas,
       });
       if (ok) {
         this._draftDirty = false;
@@ -1234,6 +1262,14 @@ async _act(action, target) {
       this._markDirty();
     } else if (action === "toggle-excl-auto") {
       this._toggle(this._draft.excluded_automations, target.dataset.id);
+      this._markDirty();
+      this._render(true);
+    } else if (action === "toggle-sel-label") {
+      this._toggle(this._draft.selected_labels, target.dataset.label);
+      this._markDirty();
+      this._render(true);
+    } else if (action === "toggle-sel-area") {
+      this._toggle(this._draft.selected_areas, target.dataset.area);
       this._markDirty();
       this._render(true);
     } else if (action === "toggle-excl-label") {
