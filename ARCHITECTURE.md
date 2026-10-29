@@ -74,4 +74,5 @@ affiche un diagnostic de ce que l'appareil reconnaît.
 |---|---|
 | Python (banc de test de HA) | `tests/` — `pytest tests` |
 | JavaScript (jsdom) | `tests_js/` — `npm test` |
+| Bout en bout (vrai HA en conteneur + Playwright) | `e2e/` — workflow `e2e.yml`, manuel et hebdomadaire (stable, bêta), non bloquant ; **pas encore mis au point** |
 | CI | `.github/workflows/` : lint + sécurité, pytest (HA minimale et dernière, couverture ≥ 85 %), JS, hassfest, HACS |

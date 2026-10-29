@@ -1,0 +1,45 @@
+name: E2E (vrai Home Assistant)
+
+# Non bloquant : lancement manuel + veille hebdomadaire (versions stable et bêta de Home Assistant).
+# ATTENTION : ce banc n'a pas encore été exécuté (0.7.16) ; le premier passage sert à le mettre au point.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 1"
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        ha: ["2025.1.4", "stable", "beta"]
+    name: e2e (HA ${{ matrix.ha }})
+    steps:
+      - uses: actions/checkout@v4
+      - name: Préparer la configuration
+        run: |
+          mkdir -p ha-config/custom_components
+          cp e2e/configuration.yaml ha-config/configuration.yaml
+          cp -r custom_components/maintenance_mode ha-config/custom_components/
+      - name: Démarrer Home Assistant
+        run: docker run -d --name ha -p 8123:8123 -v "$PWD/ha-config:/config" ghcr.io/home-assistant/home-assistant:${{ matrix.ha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install
+        working-directory: e2e
+      - run: npx playwright install --with-deps chromium
+        working-directory: e2e
+      - run: npm test
+        working-directory: e2e
+      - name: Journaux de Home Assistant
+        if: always()
+        run: docker logs ha 2>&1 | tail -200
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-${{ matrix.ha }}
+          path: e2e/e2e-last.png
+          if-no-files-found: ignore

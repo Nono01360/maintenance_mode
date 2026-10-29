@@ -1,0 +1,7 @@
+{
+  "name": "maintenance-mode-e2e",
+  "private": true,
+  "description": "Banc de bout en bout : vrai Home Assistant (conteneur) + vrai navigateur (Playwright)",
+  "scripts": { "test": "node run.js" },
+  "dependencies": { "playwright": "1.49.1" }
+}
