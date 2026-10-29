@@ -25,7 +25,7 @@ jobs:
           cp -r custom_components/maintenance_mode ha-config/custom_components/
       - name: Démarrer Home Assistant
         run: docker run -d --name ha -p 8123:8123 -v "$PWD/ha-config:/config" ghcr.io/home-assistant/home-assistant:${{ matrix.ha }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
       - run: npm install
