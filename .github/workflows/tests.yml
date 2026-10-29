@@ -28,19 +28,24 @@ jobs:
           - name: "HA minimale 2025.1"
             python: "3.12"
             requirements: "pytest-homeassistant-custom-component==0.13.205"
+            # pycares >= 4.9 lance un thread de fond que le plugin de test de HA 2025.1 refuse (« thread résiduel »)
+            constraints: "pycares<4.9"
           # Dernière version
           - name: "HA dernière"
             python: "3.13"
             requirements: "pytest-homeassistant-custom-component"
+            constraints: ""
     name: pytest (${{ matrix.name }})
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - run: pip install "${{ matrix.requirements }}" pytest-cov
+      - name: Contraintes de dépendances de la branche
+        run: echo "${{ matrix.constraints }}" > constraints.txt
+      - run: pip install -c constraints.txt "${{ matrix.requirements }}" pytest-cov
       - name: Installer le frontend de Home Assistant
-        run: pip install $(python -c "import json,pathlib,homeassistant as h;print(' '.join(json.loads((pathlib.Path(h.__file__).parent/'components'/'frontend'/'manifest.json').read_text())['requirements']))")
+        run: pip install -c constraints.txt $(python -c "import json,pathlib,homeassistant as h;print(' '.join(json.loads((pathlib.Path(h.__file__).parent/'components'/'frontend'/'manifest.json').read_text())['requirements']))")
       - name: Version de Home Assistant testée
         run: python -c "import homeassistant.const as c;print(c.__version__)"
       - name: Tests et couverture (seuil 85 %)
