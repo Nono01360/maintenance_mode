@@ -79,3 +79,5 @@ FORBIDDEN_NOTIFY = {"notify", "send_message"}
 
 # Limitation douce : au plus ce nombre de modifications de réglages par minute via le panneau
 CONFIG_WRITES_PER_MINUTE = 60
+
+MAX_EXCLUDED_LABELS = 200

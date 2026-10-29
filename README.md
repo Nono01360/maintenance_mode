@@ -58,6 +58,11 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
   `config/devices`, …). Un chemin bloque aussi ses sous-pages.
 - **Automatisations** : si aucune n'est sélectionnée, **toutes** sont suspendues. Seules celles qui étaient
   actives sont réactivées à la fin.
+- **Protections** (Paramètres › Protections) : des automatisations, ou toutes celles portant une **étiquette**, ne sont
+  **jamais** suspendues, même si elles sont sélectionnées ou si « toutes » sont visées. Une sélection qui contient une
+  automatisation protégée est signalée dans les paramètres. Les étiquettes se règlent dans Home Assistant
+  (Paramètres › Étiquettes) ; seules les automatisations qui ont un identifiant (donc présentes dans le registre des
+  entités) peuvent en porter.
 - **Utilisateurs non impactés** : si aucun n'est sélectionné, **seul le propriétaire** n'est pas impacté.
 - **Notification** : avant le début d'une maintenance, une petite notification (fermable) prévient les
   utilisateurs, avec le motif et les pages concernées.

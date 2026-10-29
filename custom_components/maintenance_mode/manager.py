@@ -16,6 +16,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .access import AccessMixin
+from .protection import ProtectionMixin
 from .settings import SettingsMixin
 from .storage import STORAGE_VERSION, MaintenanceStore, StorageMixin, default_config
 from .planning import PlanningMixin
@@ -51,7 +52,7 @@ def get_manager(hass: HomeAssistant) -> MaintenanceManager | None:
     return None
 
 
-class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, ValidationMixin, PlanningMixin, StorageMixin, SettingsMixin):
+class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, ValidationMixin, PlanningMixin, StorageMixin, SettingsMixin, ProtectionMixin):
     """Source de vérité unique ; entités, panneau, services et calendrier la reflètent."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:

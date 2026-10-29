@@ -13,7 +13,7 @@ const mkState = (perms, extra = {}) => {
   if (p.includes("history_delete") && !p.includes("history")) p = [...p, "history"];   // comme le serveur
   const cfg = {};
   if (p.includes("settings")) Object.assign(cfg, { automations: [], allowed_users: [], warn_minutes: 15, end_soon_minutes: 10, message: "msg",
-    notify_services: [], notify_kinds: ["pre"], banner_mode: "bar", banner_scroll: true, compat_mode: false });
+    notify_services: [], notify_kinds: ["pre"], banner_mode: "bar", banner_scroll: true, compat_mode: false, excluded_automations: [], excluded_labels: [] });
   if (p.some((x) => ["templates", "schedule", "control"].includes(x))) cfg.templates = [{ id: "t1", name: "MAJ", reason: "", pages: [], pause_automations: true, duration: 60, repeat: "none" }];
   if (p.includes("access")) Object.assign(cfg, { roles: [{ id: "r1", name: "Opérateur", permissions: ["view", "control"] }, { id: "r2", name: "Super", permissions: ["view", "settings"] }], panel_access: {} });
   const st = { role: "x", permissions: p, now: new Date().toISOString(), active: false, current: null, message: "m",

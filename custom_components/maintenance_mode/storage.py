@@ -127,6 +127,8 @@ def default_config() -> dict[str, Any]:
         "roles": [],             # rôles personnalisés : [{id, name, permissions}]
         "banner_mode": "bar",    # "bar" (bandeau en haut de la page) ou "card"
         "banner_scroll": True,   # défilement du texte s'il dépasse la fenêtre
+        "excluded_automations": [],   # jamais suspendues, même si sélectionnées
+        "excluded_labels": [],        # idem pour toutes les automatisations portant une de ces étiquettes
         "compat_mode": False,    # True : aucune modification de la structure interne du frontend de HA
     }
 

@@ -8,7 +8,7 @@ from datetime import timedelta
 from homeassistant.util import dt as dt_util
 
 from .errors import MaintenanceError
-from .const import BANNER_MODES, DEFAULT_MESSAGE, FORBIDDEN_NOTIFY, NOTIFY_KINDS
+from .const import MAX_EXCLUDED_LABELS, BANNER_MODES, DEFAULT_MESSAGE, FORBIDDEN_NOTIFY, NOTIFY_KINDS
 from .window import parse_iso
 
 _NOTIFY_NAME = re.compile(r"^[a-z0-9_]+$")
@@ -57,6 +57,12 @@ class SettingsMixin:
                 cfg["automations"] = sorted(
                     {e for e in changes["automations"] if isinstance(e, str) and e.startswith("automation.")}
                 )
+            if "excluded_automations" in changes:
+                cfg["excluded_automations"] = sorted(
+                    {e for e in changes["excluded_automations"] if isinstance(e, str) and e.startswith("automation.")}
+                )
+            if "excluded_labels" in changes:
+                cfg["excluded_labels"] = sorted({str(x) for x in changes["excluded_labels"] if x})[:MAX_EXCLUDED_LABELS]
             if "allowed_users" in changes:
                 cfg["allowed_users"] = [u for u in dict.fromkeys(changes["allowed_users"]) if u in valid]
             if "warn_minutes" in changes:

@@ -18,17 +18,8 @@ class SuspensionMixin:
     """Démarre / termine une maintenance. Suppose `hass`, `config`, `current`, `disabled`, `history`, `_lock`
     et `_notify` du gestionnaire."""
 
-    def _targets(self) -> list[str]:
-        """Automatisations à couper : celles choisies, ou toutes si aucune choisie."""
-        selected = self.config["automations"]
-        candidates = selected or self.hass.states.async_entity_ids("automation")
-        return [
-            e for e in candidates
-            if (state := self.hass.states.get(e)) and state.state == STATE_ON
-        ]
-
     async def _activate(self, window: Window) -> None:
-        targets = self._targets() if window.pause_automations else []
+        targets = self.plan_suspension()["suspend"] if window.pause_automations else []
         if targets:
             try:
                 await self.hass.services.async_call(

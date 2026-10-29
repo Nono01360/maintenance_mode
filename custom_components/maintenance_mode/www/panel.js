@@ -126,6 +126,9 @@ const T = {
     err_access_denied: "Accès refusé.",
     err_rate_limited: "Trop de modifications en peu de temps : réessaie dans quelques secondes.",
     banner_hint: "Sans défilement, le texte passe à la ligne (avec un ascenseur s'il est très long). Le bandeau repousse l'interface vers le bas ; en cas de problème d'affichage, choisis la petite carte.",
+    s_protect: "Protections", protect_hint: "Ces automatisations ne sont JAMAIS suspendues, même si elles sont sélectionnées ci-dessus ou si « toutes » sont visées.",
+    protect_labels: "Étiquettes protégées", protect_no_labels: "Aucune étiquette dans Home Assistant.", protect_autos: "Automatisations protégées",
+    protected_badge: "protégée", protect_conflict: "{n} automatisation(s) sélectionnée(s) mais protégée(s) : elle(s) ne sera/seront pas suspendue(s).",
     s_compat: "Compatibilité", compat_mode: "Mode compatibilité : ne rien modifier dans la structure de Home Assistant",
     compat_hint: "Désactive le décalage de la page et le masquage de l'entrée de menu (la petite carte remplace le bandeau). À utiliser si l'affichage de Home Assistant est cassé après une mise à jour.",
     diag_title: "Diagnostic de cet appareil", diag_none: "Aucune information : recharge la page pour que le bandeau se charge.",
@@ -213,6 +216,9 @@ const T = {
     err_access_denied: "Access denied.",
     err_rate_limited: "Too many changes in a short time: try again in a few seconds.",
     banner_hint: "Without scrolling, the text wraps (with a scrollbar if very long). The banner pushes the interface down; if the display looks wrong, choose the small card.",
+    s_protect: "Protections", protect_hint: "These automations are NEVER paused, even if selected above or if \"all\" are targeted.",
+    protect_labels: "Protected labels", protect_no_labels: "No label in Home Assistant.", protect_autos: "Protected automations",
+    protected_badge: "protected", protect_conflict: "{n} automation(s) selected but protected: they will not be paused.",
     s_compat: "Compatibility", compat_mode: "Compatibility mode: do not modify Home Assistant's page structure",
     compat_hint: "Turns off the page offset and the hiding of the menu entry (the small card replaces the banner). Use it if the Home Assistant display breaks after an update.",
     diag_title: "Diagnostics for this device", diag_none: "No information: reload the page so the banner script loads.",
@@ -408,6 +414,8 @@ class MaintenanceModePanel extends HTMLElement {
         banner_mode: d.config.banner_mode || "bar",
         banner_scroll: d.config.banner_scroll !== false,
         compat_mode: d.config.compat_mode === true,
+        excluded_automations: [...(d.config.excluded_automations || [])],
+        excluded_labels: [...(d.config.excluded_labels || [])],
         automations: [...d.config.automations],
         allowed_users: [...d.config.allowed_users],
         warn_minutes: d.config.warn_minutes,
@@ -761,6 +769,8 @@ class MaintenanceModePanel extends HTMLElement {
     const f = this._autoFilter.toLowerCase();
     const selected = new Set(dr.automations);
     const notifyServices = this._notifyServices();
+    const prot = this._protectedSet();
+    const conflict = dr.automations.filter((id) => prot.has(id)).length;
     return `
       <ha-card class="card"><div class="col">
         <h2>${this._t("s_page")}</h2>
@@ -778,10 +788,28 @@ class MaintenanceModePanel extends HTMLElement {
           ${autos.length ? autos.map((a) => `<label class="check" data-filter="${esc((a.name + " " + a.id).toLowerCase())}"
               ${f && !(a.name + " " + a.id).toLowerCase().includes(f) ? "hidden" : ""}>
             <input type="checkbox" data-action="toggle-auto" data-id="${esc(a.id)}" ${selected.has(a.id) ? "checked" : ""}>
-            <span class="grow">${esc(a.name)} <span class="muted">${esc(a.id)}</span></span></label>`).join("")
+            <span class="grow">${esc(a.name)} <span class="muted">${esc(a.id)}</span></span>${prot.has(a.id) ? `<span class="chip">${this._t("protected_badge")}</span>` : ""}</label>`).join("")
             : `<div class="empty">${this._t("no_autos")}</div>`}
         </div>
+        ${conflict ? `<div class="banner error">${this._t("protect_conflict", { n: conflict })}</div>` : ""}
         ${dr.automations.length ? `<div><button class="btn sm" data-action="auto-none">${this._t("deselect_all")}</button></div>` : ""}
+      </div></ha-card>
+
+      <ha-card class="card"><div class="col">
+        <div><h2>${this._t("s_protect")}</h2><div class="muted">${this._t("protect_hint")}</div></div>
+        <h3>${this._t("protect_labels")}</h3>
+        <div class="list">
+          ${(this._catalog?.labels || []).length ? this._catalog.labels.map((l) => `<label class="check">
+            <input type="checkbox" data-action="toggle-excl-label" data-label="${esc(l.id)}" ${dr.excluded_labels.includes(l.id) ? "checked" : ""}>
+            <span class="grow">${esc(l.name)} <span class="muted">${l.automations.length}</span></span></label>`).join("")
+            : `<div class="empty">${this._t("protect_no_labels")}</div>`}
+        </div>
+        <h3>${this._t("protect_autos")}</h3>
+        <div class="list">
+          ${autos.map((a) => `<label class="check">
+            <input type="checkbox" data-action="toggle-excl-auto" data-id="${esc(a.id)}" ${dr.excluded_automations.includes(a.id) ? "checked" : ""}>
+            <span class="grow">${esc(a.name)} <span class="muted">${esc(a.id)}</span></span></label>`).join("")}
+        </div>
       </div></ha-card>
 
       <ha-card class="card"><div class="col">
@@ -833,6 +861,25 @@ class MaintenanceModePanel extends HTMLElement {
         <button class="btn primary" data-action="save-settings" ${this._draftDirty ? "" : "disabled"}>${this._t("save_changes")}</button>
         <button class="btn" data-action="reset-settings" ${this._draftDirty ? "" : "disabled"}>${this._t("reset_changes")}</button>
       </div>`;
+  }
+
+  // Automatisations protégées d'après le brouillon : choisies une à une + celles portant une étiquette protégée
+  _protectedSet() {
+    const dr = this._draft;
+    const set = new Set(dr.excluded_automations);
+    for (const l of this._catalog?.labels || []) if (dr.excluded_labels.includes(l.id)) l.automations.forEach((a) => set.add(a));
+    return set;
+  }
+
+  async _loadCatalog() {
+    if (this._catalog || this._catalogLoading || !this._can("settings")) return;
+    this._catalogLoading = true;
+    try {
+      const r = await this._hass.callWS({ type: "maintenance_mode/get_catalog" });
+      this._catalog = r && Array.isArray(r.labels) ? r : { labels: [] };
+    } catch (_) { this._catalog = { labels: [] }; }
+    this._catalogLoading = false;
+    this._render();
   }
 
   // Diagnostic publié par le script du bandeau (overlay.js) de CET appareil
@@ -1052,6 +1099,7 @@ async _act(action, target) {
 
     if (action === "tab") {
       this._tab = target.dataset.tab; this._error = ""; this._form = null;
+      if (this._tab === "settings") this._loadCatalog();
       this._resetScroll = true; this._render(true);
     } else if (action === "menu") {
       this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }));
@@ -1160,6 +1208,8 @@ async _act(action, target) {
         banner_mode: this._draft.banner_mode,
         banner_scroll: this._draft.banner_scroll,
         compat_mode: this._draft.compat_mode,
+        excluded_automations: this._draft.excluded_automations,
+        excluded_labels: this._draft.excluded_labels,
       });
       if (ok) {
         this._draftDirty = false;
@@ -1182,6 +1232,14 @@ async _act(action, target) {
     } else if (action === "banner-mode") {
       this._draft.banner_mode = target.value;
       this._markDirty();
+    } else if (action === "toggle-excl-auto") {
+      this._toggle(this._draft.excluded_automations, target.dataset.id);
+      this._markDirty();
+      this._render(true);
+    } else if (action === "toggle-excl-label") {
+      this._toggle(this._draft.excluded_labels, target.dataset.label);
+      this._markDirty();
+      this._render(true);
     } else if (action === "toggle-compat") {
       this._draft.compat_mode = target.checked;
       this._markDirty();

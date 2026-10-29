@@ -51,6 +51,13 @@ async def ws_get_client(hass, connection, msg, manager) -> dict[str, bool]:
     return manager.client_rights(connection.user)
 
 
+@websocket_api.websocket_command({vol.Required("type"): "maintenance_mode/get_catalog"})
+@_command("settings")
+async def ws_get_catalog(hass, connection, msg, manager) -> dict[str, Any]:
+    """Étiquettes disponibles pour les protections (réservé à l'autorisation `settings`)."""
+    return manager.catalog()
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "maintenance_mode/start",
@@ -176,6 +183,7 @@ async def ws_clear_history(hass, connection, msg, manager) -> dict[str, Any]:
 COMMANDS = (
     ws_get_state,
     ws_get_client,
+    ws_get_catalog,
     ws_subscribe,
     ws_start,
     ws_stop,

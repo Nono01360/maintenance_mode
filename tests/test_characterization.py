@@ -265,7 +265,7 @@ async def test_stored_format(hass, hass_storage):
     assert set(stored["data"]) == {"config", "disabled", "current", "schedule", "history", "notified"}
     assert set(stored["data"]["config"]) == {
         "automations", "allowed_users", "warn_minutes", "message", "panel_access", "notify_services", "notify_kinds",
-        "end_soon_minutes", "templates", "roles", "banner_mode", "banner_scroll", "compat_mode",
+        "end_soon_minutes", "templates", "roles", "banner_mode", "banner_scroll", "compat_mode", "excluded_automations", "excluded_labels",
     }
     assert set(stored["data"]["current"]) == {
         "id", "start", "end", "reason", "pages", "pause_automations", "repeat", "anchor_day", "started_by",
