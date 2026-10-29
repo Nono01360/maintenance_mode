@@ -3,5 +3,5 @@
   "private": true,
   "description": "Banc de bout en bout : vrai Home Assistant (conteneur) + vrai navigateur (Playwright)",
   "scripts": { "test": "node run.js" },
-  "dependencies": { "playwright": "1.49.1" }
+  "dependencies": { "playwright": "1.55.1" }
 }
