@@ -17,7 +17,7 @@ jobs:
         ha: ["2025.1.4", "stable", "beta"]
     name: e2e (HA ${{ matrix.ha }})
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Préparer la configuration
         run: |
           mkdir -p ha-config/custom_components
