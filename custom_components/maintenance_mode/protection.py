@@ -1,6 +1,8 @@
 """Protections : quelles automatisations sont suspendues, lesquelles sont toujours épargnées."""
 from __future__ import annotations
 
+from .window import clean_pages
+
 from typing import Any
 
 from homeassistant.const import STATE_ON
@@ -91,3 +93,23 @@ class ProtectionMixin:
             )
             areas.append({"id": area.id, "name": area.name, "automations": members})
         return {"labels": labels, "areas": areas}
+
+    async def async_preview(self, *, pages: list[str], pause: bool) -> dict[str, Any]:
+        """Ce qui se passerait si une maintenance démarrait maintenant — SANS aucun effet (test à blanc).
+
+        Utilise exactement le calcul du vrai démarrage (`plan_suspension`) : l'aperçu et la réalité ne peuvent pas
+        différer. Les noms d'utilisateurs ne sont destinés qu'aux rôles qui peuvent démarrer ou planifier.
+        """
+        pages = clean_pages(pages)
+        await self._refresh_users()
+        plan = self.plan_suspension() if pause else {"suspend": [], "protected": [], "inactive": []}
+        exempt = set(self.exempt_users)
+        services = self.config["notify_services"]
+        return {
+            "pause_automations": bool(pause),
+            "scope": "pages" if pages else "all",
+            "pages": pages,
+            **plan,
+            "blocked_users": sorted(u["name"] for u in self.users if u["id"] not in exempt),
+            "notifications": {"services": len(services), "kinds": list(self.config["notify_kinds"]) if services else []},
+        }

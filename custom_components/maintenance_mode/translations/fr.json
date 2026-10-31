@@ -114,6 +114,20 @@
           "description": "Ne supprime que les maintenances terminées depuis plus longtemps que cette durée (vide = tout effacer)."
         }
       }
+    },
+    "preview": {
+      "name": "Aperçu (test à blanc)",
+      "description": "Indique ce qu'une maintenance démarrée maintenant suspendrait, protégerait et bloquerait, sans rien changer.",
+      "fields": {
+        "pages": {
+          "name": "Pages",
+          "description": "Pages à bloquer (vide = tout Home Assistant)."
+        },
+        "pause_automations": {
+          "name": "Suspendre les automatisations",
+          "description": "Coupe les automatisations pendant la maintenance."
+        }
+      }
     }
   }
 }

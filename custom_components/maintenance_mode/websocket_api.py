@@ -7,6 +7,7 @@ import voluptuous as vol
 
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
@@ -56,6 +57,21 @@ async def ws_get_client(hass, connection, msg, manager) -> dict[str, bool]:
 async def ws_get_catalog(hass, connection, msg, manager) -> dict[str, Any]:
     """Étiquettes disponibles pour les protections (réservé à l'autorisation `settings`)."""
     return manager.catalog()
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "maintenance_mode/preview",
+        vol.Optional("pages", default=[]): PAGES,
+        vol.Optional("pause_automations", default=True): cv.boolean,
+    }
+)
+@_command()
+async def ws_preview(hass, connection, msg, manager) -> dict[str, Any]:
+    """Aperçu / test à blanc : aucun effet. Réservé aux rôles qui peuvent démarrer ou planifier."""
+    if not manager.perms_for(connection.user) & {"control", "schedule"}:
+        raise Unauthorized
+    return await manager.async_preview(pages=msg["pages"], pause=msg["pause_automations"])
 
 
 @websocket_api.websocket_command(
@@ -185,6 +201,7 @@ COMMANDS = (
     ws_get_client,
     ws_get_catalog,
     ws_subscribe,
+    ws_preview,
     ws_start,
     ws_stop,
     ws_update_current,

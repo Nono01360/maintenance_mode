@@ -114,6 +114,20 @@
           "description": "Only delete maintenance that ended longer ago than this duration (empty = delete everything)."
         }
       }
+    },
+    "preview": {
+      "name": "Preview (dry run)",
+      "description": "Shows what a maintenance started now would pause, protect and block, without changing anything.",
+      "fields": {
+        "pages": {
+          "name": "Pages",
+          "description": "Pages to block (empty = all of Home Assistant)."
+        },
+        "pause_automations": {
+          "name": "Pause automations",
+          "description": "Turns automations off during maintenance."
+        }
+      }
     }
   }
 }

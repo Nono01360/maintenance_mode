@@ -5,7 +5,8 @@ from datetime import datetime
 
 import voluptuous as vol
 
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
+from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.util import dt as dt_util
@@ -77,6 +78,23 @@ def async_register(hass: HomeAssistant) -> None:
     async def _clear_history(call: ServiceCall) -> None:
         await _manager(hass).async_clear_history(call.data.get("older_than"))
 
+    async def _preview(call: ServiceCall) -> dict:
+        """Test à blanc : renvoie ce qui serait suspendu / protégé / bloqué, sans rien changer (administrateurs)."""
+        if call.context.user_id:
+            user = await hass.auth.async_get_user(call.context.user_id)
+            if user is None or not user.is_admin:
+                raise Unauthorized(context=call.context)
+        d = call.data
+        return await _manager(hass).async_preview(pages=d["pages"], pause=d["pause_automations"])
+
+    hass.services.async_register(
+        DOMAIN, "preview", _preview,
+        schema=vol.Schema({
+            vol.Optional("pages", default=[]): vol.All(cv.ensure_list, PAGES),
+            vol.Optional("pause_automations", default=True): cv.boolean,
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
     async_register_admin_service(hass, DOMAIN, "start", _start, START_SCHEMA)
     async_register_admin_service(hass, DOMAIN, "stop", _stop, vol.Schema({}))
     async_register_admin_service(hass, DOMAIN, "schedule", _schedule, SCHEDULE_SCHEMA)

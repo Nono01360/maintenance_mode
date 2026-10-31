@@ -66,3 +66,14 @@ clear_history:
     older_than:
       selector:
         duration:
+
+preview:
+  fields:
+    pages:
+      selector:
+        text:
+          multiple: true
+    pause_automations:
+      default: true
+      selector:
+        boolean:

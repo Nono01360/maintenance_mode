@@ -75,6 +75,11 @@ const T = {
     s_autos_n: "{n} sélectionnée(s) : seules celles-ci sont coupées.",
     s_autos_all: "Aucune sélectionnée : <b>toutes</b> les automatisations sont coupées pendant la maintenance.",
     s_autos_sel: "Aucune sélection individuelle : les étiquettes et zones choisies ci-dessous déterminent les automatisations coupées.",
+    pv_button: "Aperçu (rien n'est modifié)", pv_title: "Aperçu — aucun effet", pv_suspend: "Seront suspendues ({n})",
+    pv_protected: "Protégées, jamais suspendues ({n})", pv_inactive: "Déjà éteintes, laissées telles quelles ({n})",
+    pv_blocked: "Utilisateurs bloqués ({n})", pv_scope_all: "Portée : tout Home Assistant", pv_scope_pages: "Portée : {pages}",
+    pv_notify: "Notifications push : {n} service(s)", pv_notify_none: "Aucune notification push configurée",
+    pv_no_pause: "Les automatisations ne seront pas suspendues", pv_none: "aucune",
     s_select: "Sélecteurs", select_hint: "Viser toutes les automatisations portant une étiquette ou situées dans une zone, en plus de celles choisies ci-dessus. La liste est établie au démarrage de la maintenance ; les protections l'emportent.",
     select_labels: "Étiquettes visées", select_areas: "Zones visées", select_none: "Aucune dans Home Assistant.",
     search: "Rechercher…", no_autos: "Aucune automatisation trouvée.", deselect_all: "Tout désélectionner",
@@ -168,6 +173,11 @@ const T = {
     s_autos_n: "{n} selected: only these are turned off.",
     s_autos_all: "None selected: <b>all</b> automations are turned off during maintenance.",
     s_autos_sel: "No individual selection: the labels and areas chosen below determine which automations are turned off.",
+    pv_button: "Preview (nothing is changed)", pv_title: "Preview — no effect", pv_suspend: "Will be paused ({n})",
+    pv_protected: "Protected, never paused ({n})", pv_inactive: "Already off, left as they are ({n})",
+    pv_blocked: "Blocked users ({n})", pv_scope_all: "Scope: all of Home Assistant", pv_scope_pages: "Scope: {pages}",
+    pv_notify: "Push notifications: {n} service(s)", pv_notify_none: "No push notification configured",
+    pv_no_pause: "Automations will not be paused", pv_none: "none",
     s_select: "Selectors", select_hint: "Also target every automation that carries a label or sits in an area, in addition to those chosen above. The list is taken when the maintenance starts; protections always win.",
     select_labels: "Targeted labels", select_areas: "Targeted areas", select_none: "None in Home Assistant.",
     search: "Search…", no_autos: "No automation found.", deselect_all: "Deselect all",
@@ -754,6 +764,7 @@ class MaintenanceModePanel extends HTMLElement {
         <span class="muted">${this._t("repeat_hint")}</span></label>` : ""}
       ${showPause ? `<label class="check"><input type="checkbox" data-action="form-pause" ${f.pause ? "checked" : ""}>
         <span>${this._t("pause_autos")}</span></label>` : ""}
+      ${showPause ? `<div><button class="btn sm" data-action="preview-form">${this._t("pv_button")}</button></div>${this._previewHtml()}` : ""}
       <div class="actions" style="margin-top:0">
         <button class="btn primary" data-action="save-form">${this._t("save")}</button>
         <button class="btn" data-action="cancel-form">${this._t("cancel")}</button>
@@ -906,6 +917,24 @@ class MaintenanceModePanel extends HTMLElement {
     } catch (_) { this._catalog = { labels: [], areas: [] }; }
     this._catalogLoading = false;
     this._render();
+  }
+
+  // Aperçu (test à blanc) renvoyé par le serveur : ce qui serait suspendu, protégé, bloqué
+  _previewHtml() {
+    const p = this._preview;
+    if (!p) return "";
+    const name = (e) => this._hass?.states?.[e]?.attributes?.friendly_name || e;
+    const chips = (list) => (list.length ? `<div class="chips">${list.map((x) => `<span class="chip">${esc(x)}</span>`).join("")}</div>` : `<div class="muted">${this._t("pv_none")}</div>`);
+    const block = (key, list, map = (x) => x) => `<div><h3>${this._t(key, { n: list.length })}</h3>${chips(list.map(map))}</div>`;
+    const scope = p.scope === "pages" ? this._t("pv_scope_pages", { pages: p.pages.map((x) => this._pageLabel(x)).join(", ") }) : this._t("pv_scope_all");
+    return `<div class="col" style="gap:8px;border-left:4px solid var(--primary-color);padding-left:12px">
+      <h3>${this._t("pv_title")}</h3>
+      <div class="muted">${scope}</div>
+      ${p.pause_automations ? block("pv_suspend", p.suspend, name) + block("pv_protected", p.protected, name) + block("pv_inactive", p.inactive, name)
+        : `<div class="muted">${this._t("pv_no_pause")}</div>`}
+      ${block("pv_blocked", p.blocked_users)}
+      <div class="muted">${p.notifications.services ? this._t("pv_notify", { n: p.notifications.services }) : this._t("pv_notify_none")}</div>
+    </div>`;
   }
 
   // Diagnostic publié par le script du bandeau (overlay.js) de CET appareil
@@ -1085,6 +1114,7 @@ class MaintenanceModePanel extends HTMLElement {
       repeat: w?.repeat || "none",
     };
     this._error = "";
+    this._preview = null;
     this._render(true);
   }
 
@@ -1178,6 +1208,7 @@ async _act(action, target) {
       }
     } else if (action === "cancel-form") {
       this._form = null;
+      this._preview = null;
       this._error = "";
       this._render(true);
     } else if (action === "save-form") {
@@ -1187,10 +1218,10 @@ async _act(action, target) {
     } else if (action === "save-template") {
       this._saveTemplate();
     } else if (action === "scope") {
-      this._form.scope = target.value;
+      this._form.scope = target.value; this._preview = null;
       this._render(true);
     } else if (action === "toggle-page") {
-      this._toggle(this._form.pages, target.dataset.page);
+      this._toggle(this._form.pages, target.dataset.page); this._preview = null;
     } else if (action === "add-custom-page") {
       const p = this._form.custom.trim().replace(/^\/+|\/+$/g, "");
       if (p && !this._form.pages.includes(p)) {
@@ -1204,7 +1235,7 @@ async _act(action, target) {
     } else if (action === "form-repeat") {
       this._form.repeat = target.value;
     } else if (action === "form-pause") {
-      this._form.pause = target.checked;
+      this._form.pause = target.checked; this._preview = null;
     } else if (action === "toggle-auto") {
       this._toggle(this._draft.automations, target.dataset.id);
       this._markDirty();
@@ -1263,6 +1294,13 @@ async _act(action, target) {
     } else if (action === "toggle-excl-auto") {
       this._toggle(this._draft.excluded_automations, target.dataset.id);
       this._markDirty();
+      this._render(true);
+    } else if (action === "preview-form") {
+      const f = this._form;
+      try {
+        this._preview = await this._hass.callWS({ type: "maintenance_mode/preview", pages: f.scope === "pages" ? f.pages : [], pause_automations: f.pause });
+        this._error = "";
+      } catch (err) { this._preview = null; this._error = this._errText(err); }
       this._render(true);
     } else if (action === "toggle-sel-label") {
       this._toggle(this._draft.selected_labels, target.dataset.label);
