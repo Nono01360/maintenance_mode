@@ -109,10 +109,13 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
     # -- rôles et autorisations --
     # ------------------------------------------------------------------ actions
     async def async_start_now(
-        self, *, end: datetime | None, reason: str, pages: list[str], pause: bool, by: str = ""
+        self, *, end: datetime | None, reason: str, pages: list[str], pause: bool, by: str = "",
+        max_minutes: int | None = None,
     ) -> None:
         async with self._lock:
             end = self._check_end(end)
+            max_minutes = self._clean_max(max_minutes)
+            self._check_max_duration(dt_util.utcnow(), end, max_minutes)
             window = Window(
                 id=uuid.uuid4().hex[:8],
                 start=dt_util.utcnow(),
@@ -121,6 +124,7 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
                 pages=clean_pages(pages),
                 pause_automations=pause,
                 started_by=by,
+                max_minutes=max_minutes,
             )
             if self.current:
                 await self._deactivate("replaced")
@@ -140,11 +144,14 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
             if not self.current:
                 raise MaintenanceError("no_current")
             end = self._check_end(end)
+            self._check_max_duration(self.current.start, end, self.current.max_minutes)
             if end:
                 for w in self.schedule:
                     if overlap(self.current.start, end, w.start, w.end):
                         raise MaintenanceError("end_overlaps_scheduled")
             self.current.end = end
+            self.current.capped = False
+            self._apply_max_duration(self.current)      # une fin retirée est ramenée à la durée maximale
             self.current.reason = self._check_reason(reason)
             self.current.pages = clean_pages(pages)
             await self._commit()
@@ -158,11 +165,14 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
         pages: list[str],
         pause: bool,
         repeat: str = "none",
+        max_minutes: int | None = None,
     ) -> Window:
         async with self._lock:
             if len(self.schedule) >= MAX_WINDOWS:
                 raise MaintenanceError("max_windows", max=MAX_WINDOWS)
             start, end = self._check_window(start, end, ignore_id=None)
+            max_minutes = self._clean_max(max_minutes)
+            self._check_max_duration(start, end, max_minutes)
             window = Window(
                 id=uuid.uuid4().hex[:8],
                 start=start,
@@ -172,6 +182,7 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
                 pause_automations=pause,
                 repeat=self._check_repeat(repeat, start, end),
                 anchor_day=dt_util.as_local(start).day,
+                max_minutes=max_minutes,
             )
             self.schedule.append(window)
             self.schedule.sort(key=lambda w: w.start)
@@ -188,10 +199,14 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
         pages: list[str],
         pause: bool,
         repeat: str = "none",
+        max_minutes: int | None = None,
     ) -> None:
         async with self._lock:
             window = self._find(window_id)
             start, end = self._check_window(start, end, ignore_id=window_id)
+            max_minutes = self._clean_max(max_minutes)
+            self._check_max_duration(start, end, max_minutes)
+            window.max_minutes = max_minutes
             window.start, window.end = start, end
             window.reason = self._check_reason(reason)
             window.pages = clean_pages(pages)

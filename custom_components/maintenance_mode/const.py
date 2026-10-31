@@ -81,3 +81,6 @@ FORBIDDEN_NOTIFY = {"notify", "send_message"}
 CONFIG_WRITES_PER_MINUTE = 60
 
 MAX_EXCLUDED_LABELS = 200
+
+# Durée maximale d'une maintenance (minutes) : 0 = aucune limite
+MAX_DURATION_MINUTES = 525600

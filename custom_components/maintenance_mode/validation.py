@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.util import dt as dt_util
 
 from .errors import MaintenanceError
-from .const import MAX_REASON, MAX_TEMPLATES, REPEATS
+from .const import MAX_DURATION_MINUTES, MAX_REASON, MAX_TEMPLATES, REPEATS
 from .window import Window, clean_pages, overlap, shift
 
 
@@ -80,7 +80,34 @@ class ValidationMixin:
                     "pages": clean_pages(t.get("pages", [])),
                     "pause_automations": bool(t.get("pause_automations", True)),
                     "duration": int(duration) if duration else None,
+                    "max_minutes": ValidationMixin._clean_max(t.get("max_minutes")),
                     "repeat": repeat if repeat in REPEATS else "none",
                 }
             )
         return out
+
+    # ------------------------------------------------------------------ durée maximale
+    @staticmethod
+    def _clean_max(value: Any) -> int | None:
+        """`None` = valeur par défaut des réglages ; 0 = sans limite ; sinon minutes bornées."""
+        if value is None or value == "":
+            return None
+        return max(0, min(MAX_DURATION_MINUTES, int(value)))
+
+    def _max_cap(self, max_minutes: int | None) -> timedelta | None:
+        """Durée maximale effective (la maintenance, sinon le réglage) ; None = sans limite."""
+        minutes = max_minutes if max_minutes is not None else self.config["max_duration_minutes"]
+        return timedelta(minutes=minutes) if minutes else None
+
+    def _check_max_duration(self, start: datetime, end: datetime | None, max_minutes: int | None) -> None:
+        """Refuse une fin explicite qui dépasse la durée maximale (une fin absente est ramenée au démarrage)."""
+        cap = self._max_cap(max_minutes)
+        if cap and end is not None and end - start > cap:
+            raise MaintenanceError("max_duration_exceeded", max=int(cap.total_seconds() // 60))
+
+    def _apply_max_duration(self, window: Window) -> None:
+        """Sans fin, ou fin au-delà du maximum : la fin devient début + durée maximale (marquée `capped`)."""
+        cap = self._max_cap(window.max_minutes)
+        if cap and (window.end is None or window.end - window.start > cap):
+            window.end = window.start + cap
+            window.capped = True

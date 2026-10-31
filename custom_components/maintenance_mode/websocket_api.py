@@ -12,12 +12,13 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .limits import ID, PAGES, TEXT
-from .const import REPEATS, SIGNAL_STATE_UPDATED
+from .const import MAX_DURATION_MINUTES, REPEATS, SIGNAL_STATE_UPDATED
 from .manager import get_manager
 from .ws_common import _command
 from .ws_config import ws_update_config
 
 DATETIME = vol.Any(None, cv.datetime)
+MAX_MINUTES = vol.Any(None, vol.All(vol.Coerce(int), vol.Range(min=0, max=MAX_DURATION_MINUTES)))
 # NB : le champ « id » est réservé au numéro de message websocket -> « window_id ».
 
 
@@ -81,6 +82,7 @@ async def ws_preview(hass, connection, msg, manager) -> dict[str, Any]:
         vol.Optional("reason", default=""): TEXT,
         vol.Optional("pages", default=[]): PAGES,
         vol.Optional("pause_automations", default=True): cv.boolean,
+        vol.Optional("max_minutes"): MAX_MINUTES,
     }
 )
 @_command("control")
@@ -91,6 +93,7 @@ async def ws_start(hass, connection, msg, manager) -> dict[str, Any]:
         pages=msg["pages"],
         pause=msg["pause_automations"],
         by=connection.user.name or "",
+        max_minutes=msg.get("max_minutes"),
     )
     return manager.state_for(connection.user)
 
@@ -125,6 +128,7 @@ _WINDOW_FIELDS = {
     vol.Optional("pages", default=[]): PAGES,
     vol.Optional("pause_automations", default=True): cv.boolean,
     vol.Optional("repeat", default="none"): vol.In(REPEATS),
+    vol.Optional("max_minutes"): MAX_MINUTES,
 }
 
 
@@ -140,6 +144,7 @@ async def ws_add_window(hass, connection, msg, manager) -> dict[str, Any]:
         pages=msg["pages"],
         pause=msg["pause_automations"],
         repeat=msg["repeat"],
+        max_minutes=msg.get("max_minutes"),
     )
     return manager.state_for(connection.user)
 
@@ -161,6 +166,7 @@ async def ws_update_window(hass, connection, msg, manager) -> dict[str, Any]:
         pages=msg["pages"],
         pause=msg["pause_automations"],
         repeat=msg["repeat"],
+        max_minutes=msg.get("max_minutes"),
     )
     return manager.state_for(connection.user)
 

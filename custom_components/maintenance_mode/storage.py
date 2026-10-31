@@ -131,6 +131,7 @@ def default_config() -> dict[str, Any]:
         "selected_areas": [],         # zones dont les automatisations sont visées
         "excluded_automations": [],   # jamais suspendues, même si sélectionnées
         "excluded_labels": [],        # idem pour toutes les automatisations portant une de ces étiquettes
+        "max_duration_minutes": 0,   # durée maximale par défaut (minutes) ; 0 = aucune
         "compat_mode": False,    # True : aucune modification de la structure interne du frontend de HA
     }
 

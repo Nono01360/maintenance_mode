@@ -58,6 +58,10 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
   `config/devices`, …). Un chemin bloque aussi ses sous-pages.
 - **Automatisations** : si aucune n'est sélectionnée, **toutes** sont suspendues. Seules celles qui étaient
   actives sont réactivées à la fin.
+- **Durée maximale** (Paramètres › Page de maintenance ; réglable aussi par modèle et par maintenance) : une maintenance sans
+  fin s'arrête d'elle-même à cette durée (rappel « avant la fin » puis notification de fin, historique « arrêtée à la durée
+  maximale »). Vide = valeur par défaut des paramètres, `0` = sans limite. Une fin explicite plus lointaine que le maximum
+  est refusée ; si le maximum est abaissé après coup, la fin est ramenée au maximum au démarrage.
 - **Aperçu / test à blanc** : le bouton « Aperçu » des formulaires (et le service `maintenance_mode.preview`, qui renvoie
   la réponse) liste, **sans rien modifier**, les automatisations qui seraient suspendues, celles qui sont protégées, celles
   déjà éteintes, les utilisateurs bloqués et les notifications prévues. C'est le même calcul que le vrai démarrage : l'aperçu

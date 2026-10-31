@@ -17,6 +17,12 @@ start:
       default: true
       selector:
         boolean:
+    max_minutes:
+      selector:
+        number:
+          min: 0
+          max: 525600
+          unit_of_measurement: min
 
 stop:
 
@@ -43,6 +49,12 @@ schedule:
       default: true
       selector:
         boolean:
+    max_minutes:
+      selector:
+        number:
+          min: 0
+          max: 525600
+          unit_of_measurement: min
     repeat:
       default: none
       selector:

@@ -75,6 +75,8 @@ const T = {
     s_autos_n: "{n} sélectionnée(s) : seules celles-ci sont coupées.",
     s_autos_all: "Aucune sélectionnée : <b>toutes</b> les automatisations sont coupées pendant la maintenance.",
     s_autos_sel: "Aucune sélection individuelle : les étiquettes et zones choisies ci-dessous déterminent les automatisations coupées.",
+    max_label: "Durée maximale (minutes, facultatif)", max_hint: "Vide : valeur par défaut des paramètres ; 0 : sans limite. Une maintenance sans fin s'arrête à cette durée, avec un rappel avant.",
+    s_maxdur: "Durée maximale par défaut (minutes, 0 = aucune)", e_max_duration: "arrêtée à la durée maximale",
     pv_button: "Aperçu (rien n'est modifié)", pv_title: "Aperçu — aucun effet", pv_suspend: "Seront suspendues ({n})",
     pv_protected: "Protégées, jamais suspendues ({n})", pv_inactive: "Déjà éteintes, laissées telles quelles ({n})",
     pv_blocked: "Utilisateurs bloqués ({n})", pv_scope_all: "Portée : tout Home Assistant", pv_scope_pages: "Portée : {pages}",
@@ -132,6 +134,7 @@ const T = {
     err_overlaps_current: "Cette période chevauche la maintenance en cours.",
     err_too_many_pages: "Maximum {max} pages par maintenance.",
     err_access_denied: "Accès refusé.",
+    err_max_duration_exceeded: "La durée dépasse la durée maximale ({max} min).",
     err_rate_limited: "Trop de modifications en peu de temps : réessaie dans quelques secondes.",
     banner_hint: "Sans défilement, le texte passe à la ligne (avec un ascenseur s'il est très long). Le bandeau repousse l'interface vers le bas ; en cas de problème d'affichage, choisis la petite carte.",
     s_protect: "Protections", protect_hint: "Ces automatisations ne sont JAMAIS suspendues, même si elles sont sélectionnées ci-dessus ou si « toutes » sont visées.",
@@ -173,6 +176,8 @@ const T = {
     s_autos_n: "{n} selected: only these are turned off.",
     s_autos_all: "None selected: <b>all</b> automations are turned off during maintenance.",
     s_autos_sel: "No individual selection: the labels and areas chosen below determine which automations are turned off.",
+    max_label: "Maximum duration (minutes, optional)", max_hint: "Empty: default from the settings; 0: no limit. A maintenance without an end stops at this duration, with a reminder before.",
+    s_maxdur: "Default maximum duration (minutes, 0 = none)", e_max_duration: "stopped at the maximum duration",
     pv_button: "Preview (nothing is changed)", pv_title: "Preview — no effect", pv_suspend: "Will be paused ({n})",
     pv_protected: "Protected, never paused ({n})", pv_inactive: "Already off, left as they are ({n})",
     pv_blocked: "Blocked users ({n})", pv_scope_all: "Scope: all of Home Assistant", pv_scope_pages: "Scope: {pages}",
@@ -230,6 +235,7 @@ const T = {
     err_overlaps_current: "This period overlaps the current maintenance.",
     err_too_many_pages: "Maximum {max} pages per maintenance.",
     err_access_denied: "Access denied.",
+    err_max_duration_exceeded: "The duration exceeds the maximum duration ({max} min).",
     err_rate_limited: "Too many changes in a short time: try again in a few seconds.",
     banner_hint: "Without scrolling, the text wraps (with a scrollbar if very long). The banner pushes the interface down; if the display looks wrong, choose the small card.",
     s_protect: "Protections", protect_hint: "These automations are NEVER paused, even if selected above or if \"all\" are targeted.",
@@ -430,6 +436,7 @@ class MaintenanceModePanel extends HTMLElement {
         banner_mode: d.config.banner_mode || "bar",
         banner_scroll: d.config.banner_scroll !== false,
         compat_mode: d.config.compat_mode === true,
+        max_duration_minutes: Number(d.config.max_duration_minutes) || 0,
         excluded_automations: [...(d.config.excluded_automations || [])],
         excluded_labels: [...(d.config.excluded_labels || [])],
         selected_labels: [...(d.config.selected_labels || [])],
@@ -690,7 +697,7 @@ class MaintenanceModePanel extends HTMLElement {
   _historyHtml() {
     const hist = this._data.history || [];
     const canDelete = this._can("history_delete");
-    const ended = { manual: "e_manual", auto: "e_auto", replaced: "e_replaced" };
+    const ended = { manual: "e_manual", auto: "e_auto", replaced: "e_replaced", max_duration: "e_max_duration" };
     const clearText = this._confirm === "hist:all" ? this._t("h_clear_confirm") : this._t("h_clear");
     return `<ha-card class="card">
       <div class="row"><div class="grow"><h2>${this._t("h_title")}</h2></div>
@@ -750,6 +757,8 @@ class MaintenanceModePanel extends HTMLElement {
         <label class="field">${this._t("end_opt")}<input type="datetime-local" data-field="form.end" value="${esc(f.end)}"></label>
       </div>
       <div class="muted">${this._t("tz_note", { tz: this._tzLabel() })}</div>
+      ${f.mode !== "current" ? `<label class="field">${this._t("max_label")}
+        <input type="number" min="0" max="525600" data-field="form.max" value="${esc(f.max)}"><span class="muted">${this._t("max_hint")}</span></label>` : ""}
       <label class="field">${this._t("reason_opt")}<input type="text" maxlength="200" data-field="form.reason" value="${esc(f.reason)}"></label>
       <div class="col" style="gap:8px"><span class="muted">${this._t("scope")}</span>
         <div class="radio">
@@ -795,6 +804,8 @@ class MaintenanceModePanel extends HTMLElement {
         <h2>${this._t("s_page")}</h2>
         <label class="field">${this._t("s_message")}
           <textarea maxlength="255" data-field="draft.message">${esc(dr.message)}</textarea></label>
+        <label class="field">${this._t("s_maxdur")}
+          <input type="number" min="0" max="525600" data-field="draft.maxdur" value="${esc(dr.max_duration_minutes)}"></label>
         <label class="field">${this._t("s_warn")}
           <input type="number" min="1" max="1440" data-field="draft.warn" value="${esc(dr.warn_minutes)}"></label>
       </div></ha-card>
@@ -1048,10 +1059,12 @@ class MaintenanceModePanel extends HTMLElement {
     } else if (field === "form.start") this._form.start = t.value;
     else if (field === "form.end") this._form.end = t.value;
     else if (field === "form.reason") this._form.reason = t.value;
+    else if (field === "form.max") { this._form.max = t.value; this._preview = null; }
     else if (field === "form.custom") this._form.custom = t.value;
     else if (field === "form.tplName") this._form.tplName = t.value;
     else if (field === "role.name") { this._rolesDraft[Number(t.dataset.idx)].name = t.value; this._markRolesDirty(); }
     else if (field === "draft.message") { this._draft.message = t.value; this._markDirty(); }
+    else if (field === "draft.maxdur") { this._draft.max_duration_minutes = Number(t.value) || 0; this._markDirty(); }
     else if (field === "draft.warn") { this._draft.warn_minutes = Number(t.value) || 15; this._markDirty(); }
     else if (field === "draft.endsoon") { this._draft.end_soon_minutes = Number(t.value) || 10; this._markDirty(); }
   }
@@ -1112,6 +1125,7 @@ class MaintenanceModePanel extends HTMLElement {
       custom: "", tplName: "",
       pause: w ? w.pause_automations !== false : true,
       repeat: w?.repeat || "none",
+      max: w && w.max_minutes != null ? String(w.max_minutes) : "",
     };
     this._error = "";
     this._preview = null;
@@ -1127,6 +1141,7 @@ class MaintenanceModePanel extends HTMLElement {
     f.scope = f.pages.length ? "pages" : "all";
     f.pause = t.pause_automations !== false;
     f.repeat = t.repeat || "none";
+    f.max = t.max_minutes != null ? String(t.max_minutes) : "";
     if (t.duration) {
       const base = (f.start && this._toDate(f.start)) || new Date();
       f.end = this._local(new Date(base.getTime() + t.duration * 60000));
@@ -1144,7 +1159,7 @@ class MaintenanceModePanel extends HTMLElement {
       if (mins > 0) duration = mins;
     }
     const tpl = { name, reason: f.reason.trim(), pages: f.scope === "pages" ? f.pages : [],
-      pause_automations: f.pause, duration, repeat: f.repeat };
+      pause_automations: f.pause, duration, repeat: f.repeat, max_minutes: f.max === "" ? null : Number(f.max) };
     const templates = [...(this._data.config?.templates || []), tpl];
     if (await this._call("update_config", { templates })) { f.tplName = ""; this._render(true); }
   }
@@ -1265,6 +1280,7 @@ async _act(action, target) {
         banner_mode: this._draft.banner_mode,
         banner_scroll: this._draft.banner_scroll,
         compat_mode: this._draft.compat_mode,
+        max_duration_minutes: Number(this._draft.max_duration_minutes) || 0,
         excluded_automations: this._draft.excluded_automations,
         excluded_labels: this._draft.excluded_labels,
         selected_labels: this._draft.selected_labels,
@@ -1381,14 +1397,14 @@ async _act(action, target) {
         this._render(true);
         return;
       }
-      const payload = { ...base, start: iso(f.start), end, pause_automations: f.pause, repeat: f.repeat };
+      const payload = { ...base, start: iso(f.start), end, pause_automations: f.pause, repeat: f.repeat, max_minutes: f.max === "" ? null : Number(f.max) };
       // CORRECTION : add_window et update_window
       ok = f.mode === "add"
         ? await this._call("add_window", payload)
         : await this._call("update_window", { window_id: f.id, ...payload });
     } else if (f.mode === "now") {
       // CORRECTION : endpoint "start" au lieu de "start_now"
-      ok = await this._call("start", { ...base, end, pause_automations: f.pause });
+      ok = await this._call("start", { ...base, end, pause_automations: f.pause, max_minutes: f.max === "" ? null : Number(f.max) });
     } else {
       ok = await this._call("update_current", { ...base, end });
     }

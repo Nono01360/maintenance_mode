@@ -9,7 +9,7 @@ from homeassistant.components import websocket_api
 from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import config_validation as cv
 
-from .const import BANNER_MODES, NOTIFY_KINDS, PERMISSIONS, REPEATS
+from .const import BANNER_MODES, MAX_DURATION_MINUTES, NOTIFY_KINDS, PERMISSIONS, REPEATS
 from .limits import ID, MAX_ENTITIES, MAX_LIST, MAX_USERS, PAGES, TEXT, bounded_list
 from .ws_common import _command
 
@@ -23,6 +23,7 @@ _TEMPLATE = vol.Schema(
         vol.Optional("pause_automations", default=True): cv.boolean,
         vol.Optional("duration"): vol.Any(None, vol.All(vol.Coerce(int), vol.Range(min=1, max=525600))),
         vol.Optional("repeat", default="none"): vol.In(REPEATS),
+        vol.Optional("max_minutes"): vol.Any(None, vol.All(vol.Coerce(int), vol.Range(min=0, max=MAX_DURATION_MINUTES))),
     }
 )
 _ROLE = vol.Schema(
@@ -45,6 +46,7 @@ _CONFIG_PERMS = {
     "banner_mode": "settings",
     "banner_scroll": "settings",
     "compat_mode": "settings",
+    "max_duration_minutes": "settings",
     "selected_labels": "settings",
     "selected_areas": "settings",
     "excluded_automations": "settings",
@@ -68,6 +70,7 @@ _CONFIG_PERMS = {
         vol.Optional("banner_mode"): vol.In(BANNER_MODES),
         vol.Optional("banner_scroll"): cv.boolean,
         vol.Optional("compat_mode"): cv.boolean,
+        vol.Optional("max_duration_minutes"): vol.All(vol.Coerce(int), vol.Range(min=0, max=MAX_DURATION_MINUTES)),
         vol.Optional("selected_labels"): bounded_list(ID, MAX_LIST),
         vol.Optional("selected_areas"): bounded_list(ID, MAX_LIST),
         vol.Optional("excluded_automations"): bounded_list(vol.All(cv.string, vol.Length(max=255)), MAX_ENTITIES),

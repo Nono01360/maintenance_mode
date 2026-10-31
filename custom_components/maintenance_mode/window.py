@@ -88,6 +88,8 @@ class Window:
     repeat: str = "none"
     started_by: str = ""
     anchor_day: int | None = None  # jour du mois d'origine (répétition mensuelle)
+    max_minutes: int | None = None  # durée maximale propre à cette maintenance (None = valeur par défaut, 0 = sans limite)
+    capped: bool = False  # la fin a été ramenée à la durée maximale
 
     def as_dict(self, *, public: bool = False) -> dict[str, Any]:
         """`public=True` : version sans l'initiateur, pour tout ce qui est lisible par les
@@ -101,6 +103,8 @@ class Window:
             "pause_automations": self.pause_automations,
             "repeat": self.repeat,
             "anchor_day": self.anchor_day,
+            "max_minutes": self.max_minutes,
+            "capped": self.capped,
         }
         if not public:
             data["started_by"] = self.started_by
@@ -122,6 +126,8 @@ class Window:
             repeat=repeat if repeat in REPEATS else "none",
             started_by=str(data.get("started_by", "")),
             anchor_day=data.get("anchor_day"),
+            max_minutes=data.get("max_minutes"),
+            capped=bool(data.get("capped", False)),
         )
 
     def next_occurrence(self, now: datetime) -> Window:
@@ -130,7 +136,7 @@ class Window:
             start, end = shift(start, end, self.repeat, self.anchor_day)
             if start > now:
                 break
-        return replace(self, id=uuid.uuid4().hex[:8], start=start, end=end, started_by="")
+        return replace(self, id=uuid.uuid4().hex[:8], start=start, end=end, started_by="", capped=False)
 
     def occurrences(self, until: datetime) -> Iterator[tuple[datetime, datetime | None]]:
         """Occurrences (la 1re est la fenêtre elle-même) jusqu'à `until`."""

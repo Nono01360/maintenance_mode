@@ -54,6 +54,10 @@
         "pause_automations": {
           "name": "Suspendre les automatisations",
           "description": "Coupe les automatisations pendant la maintenance."
+        },
+        "max_minutes": {
+          "name": "Durée maximale",
+          "description": "Durée maximale en minutes pour cette maintenance (vide = réglage par défaut, 0 = sans limite)."
         }
       }
     },
@@ -92,6 +96,10 @@
         "repeat": {
           "name": "Répétition",
           "description": "Aucune, quotidienne, hebdomadaire ou mensuelle (une fin est requise)."
+        },
+        "max_minutes": {
+          "name": "Durée maximale",
+          "description": "Durée maximale en minutes pour cette maintenance (vide = réglage par défaut, 0 = sans limite)."
         }
       }
     },

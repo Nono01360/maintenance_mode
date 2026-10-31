@@ -12,7 +12,7 @@ from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.util import dt as dt_util
 
 from .errors import MaintenanceError
-from .const import DOMAIN, REPEATS
+from .const import DOMAIN, MAX_DURATION_MINUTES, REPEATS
 from .limits import ID, PAGES, TEXT
 from .manager import MaintenanceManager, get_manager
 
@@ -22,6 +22,7 @@ _COMMON = {
     vol.Optional("reason", default=""): TEXT,
     vol.Optional("pages", default=[]): vol.All(cv.ensure_list, PAGES),
     vol.Optional("pause_automations", default=True): cv.boolean,
+    vol.Optional("max_minutes"): vol.All(vol.Coerce(int), vol.Range(min=0, max=MAX_DURATION_MINUTES)),
 }
 START_SCHEMA = vol.Schema(_COMMON)
 SCHEDULE_SCHEMA = vol.Schema(
@@ -57,7 +58,7 @@ def async_register(hass: HomeAssistant) -> None:
         await _manager(hass).async_start_now(
             end=_end(d, dt_util.utcnow()),
             reason=d["reason"], pages=d["pages"], pause=d["pause_automations"],
-            by="service",
+            by="service", max_minutes=d.get("max_minutes"),
         )
 
     async def _stop(call: ServiceCall) -> None:
@@ -69,7 +70,7 @@ def async_register(hass: HomeAssistant) -> None:
         await _manager(hass).async_add_window(
             start=start, end=_end(d, start),
             reason=d["reason"], pages=d["pages"], pause=d["pause_automations"],
-            repeat=d["repeat"],
+            repeat=d["repeat"], max_minutes=d.get("max_minutes"),
         )
 
     async def _cancel(call: ServiceCall) -> None:

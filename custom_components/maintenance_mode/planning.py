@@ -16,7 +16,7 @@ class PlanningMixin:
         """Termine / démarre ce qui est arrivé à échéance (idempotent)."""
         now = dt_util.utcnow()
         if self.current and self.current.end and self.current.end <= now:
-            await self._deactivate("auto")
+            await self._deactivate("max_duration" if self.current.capped else "auto")
         while self.schedule and self.schedule[0].start <= now:
             window = self.schedule.pop(0)
             if window.repeat != "none":  # la série continue : prochaine occurrence

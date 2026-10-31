@@ -19,6 +19,7 @@ class SuspensionMixin:
     et `_notify` du gestionnaire."""
 
     async def _activate(self, window: Window) -> None:
+        self._apply_max_duration(window)
         targets = self.plan_suspension()["suspend"] if window.pause_automations else []
         if targets:
             try:

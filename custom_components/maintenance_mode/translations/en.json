@@ -54,6 +54,10 @@
         "pause_automations": {
           "name": "Pause automations",
           "description": "Turns automations off during maintenance."
+        },
+        "max_minutes": {
+          "name": "Maximum duration",
+          "description": "Maximum duration in minutes for this maintenance (empty = default setting, 0 = no limit)."
         }
       }
     },
@@ -92,6 +96,10 @@
         "repeat": {
           "name": "Repeat",
           "description": "None, daily, weekly or monthly (an end is required)."
+        },
+        "max_minutes": {
+          "name": "Maximum duration",
+          "description": "Maximum duration in minutes for this maintenance (empty = default setting, 0 = no limit)."
         }
       }
     },
