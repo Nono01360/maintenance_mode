@@ -20,6 +20,7 @@ from .protection import ProtectionMixin
 from .settings import SettingsMixin
 from .storage import STORAGE_VERSION, MaintenanceStore, StorageMixin, default_config
 from .planning import PlanningMixin
+from .blackout import BlackoutMixin
 from .validation import ValidationMixin
 from .suspension import SuspensionMixin
 from .notifications import NotificationsMixin
@@ -52,7 +53,7 @@ def get_manager(hass: HomeAssistant) -> MaintenanceManager | None:
     return None
 
 
-class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, ValidationMixin, PlanningMixin, StorageMixin, SettingsMixin, ProtectionMixin):
+class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, ValidationMixin, BlackoutMixin, PlanningMixin, StorageMixin, SettingsMixin, ProtectionMixin):
     """Source de vérité unique ; entités, panneau, services et calendrier la reflètent."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -110,10 +111,11 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
     # ------------------------------------------------------------------ actions
     async def async_start_now(
         self, *, end: datetime | None, reason: str, pages: list[str], pause: bool, by: str = "",
-        max_minutes: int | None = None,
+        max_minutes: int | None = None, override_blackout: bool = False,
     ) -> None:
         async with self._lock:
             end = self._check_end(end)
+            overridden = self._check_blackout(dt_util.utcnow(), override=override_blackout, by=by)
             max_minutes = self._clean_max(max_minutes)
             self._check_max_duration(dt_util.utcnow(), end, max_minutes)
             window = Window(
@@ -125,6 +127,7 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
                 pause_automations=pause,
                 started_by=by,
                 max_minutes=max_minutes,
+                blackout_override=overridden,
             )
             if self.current:
                 await self._deactivate("replaced")
@@ -166,11 +169,13 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
         pause: bool,
         repeat: str = "none",
         max_minutes: int | None = None,
+        override_blackout: bool = False,
     ) -> Window:
         async with self._lock:
             if len(self.schedule) >= MAX_WINDOWS:
                 raise MaintenanceError("max_windows", max=MAX_WINDOWS)
             start, end = self._check_window(start, end, ignore_id=None)
+            overridden = self._check_blackout(start, override=override_blackout)
             max_minutes = self._clean_max(max_minutes)
             self._check_max_duration(start, end, max_minutes)
             window = Window(
@@ -183,6 +188,7 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
                 repeat=self._check_repeat(repeat, start, end),
                 anchor_day=dt_util.as_local(start).day,
                 max_minutes=max_minutes,
+                blackout_override=overridden,
             )
             self.schedule.append(window)
             self.schedule.sort(key=lambda w: w.start)
@@ -200,10 +206,12 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
         pause: bool,
         repeat: str = "none",
         max_minutes: int | None = None,
+        override_blackout: bool = False,
     ) -> None:
         async with self._lock:
             window = self._find(window_id)
             start, end = self._check_window(start, end, ignore_id=window_id)
+            window.blackout_override = self._check_blackout(start, override=override_blackout)
             max_minutes = self._clean_max(max_minutes)
             self._check_max_duration(start, end, max_minutes)
             window.max_minutes = max_minutes

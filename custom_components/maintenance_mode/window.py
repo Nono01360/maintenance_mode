@@ -90,6 +90,7 @@ class Window:
     anchor_day: int | None = None  # jour du mois d'origine (répétition mensuelle)
     max_minutes: int | None = None  # durée maximale propre à cette maintenance (None = valeur par défaut, 0 = sans limite)
     capped: bool = False  # la fin a été ramenée à la durée maximale
+    blackout_override: bool = False  # démarrée en dérogeant à une plage interdite (propriétaire)
 
     def as_dict(self, *, public: bool = False) -> dict[str, Any]:
         """`public=True` : version sans l'initiateur, pour tout ce qui est lisible par les
@@ -105,6 +106,7 @@ class Window:
             "anchor_day": self.anchor_day,
             "max_minutes": self.max_minutes,
             "capped": self.capped,
+            "blackout_override": self.blackout_override,
         }
         if not public:
             data["started_by"] = self.started_by
@@ -128,6 +130,7 @@ class Window:
             anchor_day=data.get("anchor_day"),
             max_minutes=data.get("max_minutes"),
             capped=bool(data.get("capped", False)),
+            blackout_override=bool(data.get("blackout_override", False)),
         )
 
     def next_occurrence(self, now: datetime) -> Window:

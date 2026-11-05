@@ -8,6 +8,7 @@ from datetime import timedelta
 from homeassistant.util import dt as dt_util
 
 from .errors import MaintenanceError
+from .blackout import clean_blackouts
 from .const import MAX_DURATION_MINUTES, MAX_EXCLUDED_LABELS, BANNER_MODES, DEFAULT_MESSAGE, FORBIDDEN_NOTIFY, NOTIFY_KINDS
 from .window import parse_iso
 
@@ -86,6 +87,8 @@ class SettingsMixin:
                 cfg["banner_mode"] = changes["banner_mode"]
             if "banner_scroll" in changes:
                 cfg["banner_scroll"] = bool(changes["banner_scroll"])
+            if "blackouts" in changes:
+                cfg["blackouts"] = clean_blackouts(changes["blackouts"])
             if "max_duration_minutes" in changes:
                 cfg["max_duration_minutes"] = max(0, min(MAX_DURATION_MINUTES, int(changes["max_duration_minutes"])))
             if "compat_mode" in changes:

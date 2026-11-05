@@ -20,7 +20,7 @@ from .window import iso
 
 _SETTINGS_KEYS = (
     "automations", "allowed_users", "warn_minutes", "end_soon_minutes", "message",
-    "notify_services", "notify_kinds", "banner_mode", "banner_scroll", "compat_mode", "max_duration_minutes",
+    "notify_services", "notify_kinds", "banner_mode", "banner_scroll", "compat_mode", "max_duration_minutes", "blackouts",
     "selected_labels", "selected_areas", "excluded_automations", "excluded_labels",
 )
 

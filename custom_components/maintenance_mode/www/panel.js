@@ -75,6 +75,9 @@ const T = {
     s_autos_n: "{n} sélectionnée(s) : seules celles-ci sont coupées.",
     s_autos_all: "Aucune sélectionnée : <b>toutes</b> les automatisations sont coupées pendant la maintenance.",
     s_autos_sel: "Aucune sélection individuelle : les étiquettes et zones choisies ci-dessous déterminent les automatisations coupées.",
+    s_blackout: "Plages interdites", bo_hint: "Jours et heures où l'on ne peut ni planifier ni démarrer de maintenance (heure de Home Assistant ; fin avant début = la plage passe minuit ; aucun jour coché = tous les jours). Seul le propriétaire peut déroger.",
+    bo_add: "Ajouter une plage", bo_none: "Aucune plage interdite.", bo_name_ph: "Nom (ex. Nuit)", bo_from: "de", bo_to: "à",
+    bo_days: ["L", "M", "M", "J", "V", "S", "D"], bo_override: "Déroger aux plages interdites (propriétaire, journalisé)",
     max_label: "Durée maximale (minutes, facultatif)", max_hint: "Vide : valeur par défaut des paramètres ; 0 : sans limite. Une maintenance sans fin s'arrête à cette durée, avec un rappel avant.",
     s_maxdur: "Durée maximale par défaut (minutes, 0 = aucune)", e_max_duration: "arrêtée à la durée maximale",
     pv_button: "Aperçu (rien n'est modifié)", pv_title: "Aperçu — aucun effet", pv_suspend: "Seront suspendues ({n})",
@@ -135,6 +138,7 @@ const T = {
     err_too_many_pages: "Maximum {max} pages par maintenance.",
     err_access_denied: "Accès refusé.",
     err_max_duration_exceeded: "La durée dépasse la durée maximale ({max} min).",
+    err_blackout_period: "Cette période est interdite pour une maintenance ({name}).",
     err_rate_limited: "Trop de modifications en peu de temps : réessaie dans quelques secondes.",
     banner_hint: "Sans défilement, le texte passe à la ligne (avec un ascenseur s'il est très long). Le bandeau repousse l'interface vers le bas ; en cas de problème d'affichage, choisis la petite carte.",
     s_protect: "Protections", protect_hint: "Ces automatisations ne sont JAMAIS suspendues, même si elles sont sélectionnées ci-dessus ou si « toutes » sont visées.",
@@ -176,6 +180,9 @@ const T = {
     s_autos_n: "{n} selected: only these are turned off.",
     s_autos_all: "None selected: <b>all</b> automations are turned off during maintenance.",
     s_autos_sel: "No individual selection: the labels and areas chosen below determine which automations are turned off.",
+    s_blackout: "Forbidden periods", bo_hint: "Days and hours when no maintenance can be scheduled or started (Home Assistant time; end before start = the period crosses midnight; no day ticked = every day). Only the owner can override.",
+    bo_add: "Add a period", bo_none: "No forbidden period.", bo_name_ph: "Name (e.g. Night)", bo_from: "from", bo_to: "to",
+    bo_days: ["M", "T", "W", "T", "F", "S", "S"], bo_override: "Override forbidden periods (owner, logged)",
     max_label: "Maximum duration (minutes, optional)", max_hint: "Empty: default from the settings; 0: no limit. A maintenance without an end stops at this duration, with a reminder before.",
     s_maxdur: "Default maximum duration (minutes, 0 = none)", e_max_duration: "stopped at the maximum duration",
     pv_button: "Preview (nothing is changed)", pv_title: "Preview — no effect", pv_suspend: "Will be paused ({n})",
@@ -236,6 +243,7 @@ const T = {
     err_too_many_pages: "Maximum {max} pages per maintenance.",
     err_access_denied: "Access denied.",
     err_max_duration_exceeded: "The duration exceeds the maximum duration ({max} min).",
+    err_blackout_period: "This period is forbidden for maintenance ({name}).",
     err_rate_limited: "Too many changes in a short time: try again in a few seconds.",
     banner_hint: "Without scrolling, the text wraps (with a scrollbar if very long). The banner pushes the interface down; if the display looks wrong, choose the small card.",
     s_protect: "Protections", protect_hint: "These automations are NEVER paused, even if selected above or if \"all\" are targeted.",
@@ -437,6 +445,7 @@ class MaintenanceModePanel extends HTMLElement {
         banner_scroll: d.config.banner_scroll !== false,
         compat_mode: d.config.compat_mode === true,
         max_duration_minutes: Number(d.config.max_duration_minutes) || 0,
+        blackouts: (d.config.blackouts || []).map((b) => ({ id: b.id, name: b.name, days: [...b.days], start: b.start, end: b.end })),
         excluded_automations: [...(d.config.excluded_automations || [])],
         excluded_labels: [...(d.config.excluded_labels || [])],
         selected_labels: [...(d.config.selected_labels || [])],
@@ -773,6 +782,7 @@ class MaintenanceModePanel extends HTMLElement {
         <span class="muted">${this._t("repeat_hint")}</span></label>` : ""}
       ${showPause ? `<label class="check"><input type="checkbox" data-action="form-pause" ${f.pause ? "checked" : ""}>
         <span>${this._t("pause_autos")}</span></label>` : ""}
+      ${f.mode !== "current" && this._hass?.user?.is_owner ? `<label class="check"><input type="checkbox" data-action="form-override" ${f.override ? "checked" : ""}><span>${this._t("bo_override")}</span></label>` : ""}
       ${showPause ? `<div><button class="btn sm" data-action="preview-form">${this._t("pv_button")}</button></div>${this._previewHtml()}` : ""}
       <div class="actions" style="margin-top:0">
         <button class="btn primary" data-action="save-form">${this._t("save")}</button>
@@ -840,6 +850,21 @@ class MaintenanceModePanel extends HTMLElement {
             <input type="checkbox" data-action="toggle-excl-auto" data-id="${esc(a.id)}" ${dr.excluded_automations.includes(a.id) ? "checked" : ""}>
             <span class="grow">${esc(a.name)} <span class="muted">${esc(a.id)}</span></span></label>`).join("")}
         </div>
+      </div></ha-card>
+
+      <ha-card class="card"><div class="col">
+        <div><h2>${this._t("s_blackout")}</h2><div class="muted">${this._t("bo_hint")}</div></div>
+        ${dr.blackouts.length ? dr.blackouts.map((b, i) => `<div class="item" style="flex-direction:column;gap:8px">
+          <div class="row" style="width:100%">
+            <input type="text" maxlength="40" placeholder="${esc(this._t("bo_name_ph"))}" data-field="bo.name" data-idx="${i}" value="${esc(b.name)}">
+            <button class="btn sm danger" data-action="delete-blackout" data-idx="${i}">${this._t("delete")}</button></div>
+          <div class="radio">${this._t("bo_days").map((d, k) => `<label><input type="checkbox" data-action="toggle-bo-day" data-idx="${i}" data-day="${k}" ${b.days.includes(k) ? "checked" : ""}> ${esc(d)}</label>`).join("")}</div>
+          <div class="row" style="width:100%"><span class="muted">${this._t("bo_from")}</span>
+            <input type="time" data-field="bo.start" data-idx="${i}" value="${esc(b.start)}">
+            <span class="muted">${this._t("bo_to")}</span>
+            <input type="time" data-field="bo.end" data-idx="${i}" value="${esc(b.end)}"></div>
+        </div>`).join("") : `<div class="muted">${this._t("bo_none")}</div>`}
+        <div><button class="btn sm" data-action="add-blackout">${this._t("bo_add")}</button></div>
       </div></ha-card>
 
       <ha-card class="card"><div class="col">
@@ -1064,6 +1089,9 @@ class MaintenanceModePanel extends HTMLElement {
     else if (field === "form.tplName") this._form.tplName = t.value;
     else if (field === "role.name") { this._rolesDraft[Number(t.dataset.idx)].name = t.value; this._markRolesDirty(); }
     else if (field === "draft.message") { this._draft.message = t.value; this._markDirty(); }
+    else if (field === "bo.name") { this._draft.blackouts[Number(t.dataset.idx)].name = t.value; this._markDirty(); }
+    else if (field === "bo.start") { this._draft.blackouts[Number(t.dataset.idx)].start = t.value; this._markDirty(); }
+    else if (field === "bo.end") { this._draft.blackouts[Number(t.dataset.idx)].end = t.value; this._markDirty(); }
     else if (field === "draft.maxdur") { this._draft.max_duration_minutes = Number(t.value) || 0; this._markDirty(); }
     else if (field === "draft.warn") { this._draft.warn_minutes = Number(t.value) || 15; this._markDirty(); }
     else if (field === "draft.endsoon") { this._draft.end_soon_minutes = Number(t.value) || 10; this._markDirty(); }
@@ -1126,6 +1154,7 @@ class MaintenanceModePanel extends HTMLElement {
       pause: w ? w.pause_automations !== false : true,
       repeat: w?.repeat || "none",
       max: w && w.max_minutes != null ? String(w.max_minutes) : "",
+      override: false,
     };
     this._error = "";
     this._preview = null;
@@ -1281,6 +1310,7 @@ async _act(action, target) {
         banner_scroll: this._draft.banner_scroll,
         compat_mode: this._draft.compat_mode,
         max_duration_minutes: Number(this._draft.max_duration_minutes) || 0,
+        blackouts: this._draft.blackouts.map((b) => ({ ...(b.id ? { id: b.id } : {}), name: b.name.trim(), days: b.days, start: b.start, end: b.end })),
         excluded_automations: this._draft.excluded_automations,
         excluded_labels: this._draft.excluded_labels,
         selected_labels: this._draft.selected_labels,
@@ -1318,6 +1348,17 @@ async _act(action, target) {
         this._error = "";
       } catch (err) { this._preview = null; this._error = this._errText(err); }
       this._render(true);
+    } else if (action === "add-blackout") {
+      this._draft.blackouts.push({ id: null, name: "", days: [], start: "22:00", end: "06:00" });
+      this._markDirty(); this._render(true);
+    } else if (action === "delete-blackout") {
+      this._draft.blackouts.splice(Number(target.dataset.idx), 1);
+      this._markDirty(); this._render(true);
+    } else if (action === "toggle-bo-day") {
+      this._toggle(this._draft.blackouts[Number(target.dataset.idx)].days, Number(target.dataset.day));
+      this._markDirty();
+    } else if (action === "form-override") {
+      this._form.override = target.checked;
     } else if (action === "toggle-sel-label") {
       this._toggle(this._draft.selected_labels, target.dataset.label);
       this._markDirty();
@@ -1388,6 +1429,7 @@ async _act(action, target) {
     }
     const iso = (v) => (v ? this._toDate(v)?.toISOString() ?? null : null);
     const base = { reason: f.reason.trim(), pages: f.scope === "pages" ? f.pages : [] };
+    const ovr = f.override && this._hass?.user?.is_owner ? { override_blackout: true } : {};
     const end = iso(f.end);
     let ok;
     
@@ -1397,14 +1439,14 @@ async _act(action, target) {
         this._render(true);
         return;
       }
-      const payload = { ...base, start: iso(f.start), end, pause_automations: f.pause, repeat: f.repeat, max_minutes: f.max === "" ? null : Number(f.max) };
+      const payload = { ...base, start: iso(f.start), end, pause_automations: f.pause, repeat: f.repeat, max_minutes: f.max === "" ? null : Number(f.max), ...ovr };
       // CORRECTION : add_window et update_window
       ok = f.mode === "add"
         ? await this._call("add_window", payload)
         : await this._call("update_window", { window_id: f.id, ...payload });
     } else if (f.mode === "now") {
       // CORRECTION : endpoint "start" au lieu de "start_now"
-      ok = await this._call("start", { ...base, end, pause_automations: f.pause, max_minutes: f.max === "" ? null : Number(f.max) });
+      ok = await this._call("start", { ...base, end, pause_automations: f.pause, max_minutes: f.max === "" ? null : Number(f.max), ...ovr });
     } else {
       ok = await this._call("update_current", { ...base, end });
     }

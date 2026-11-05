@@ -58,6 +58,12 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
   `config/devices`, …). Un chemin bloque aussi ses sous-pages.
 - **Automatisations** : si aucune n'est sélectionnée, **toutes** sont suspendues. Seules celles qui étaient
   actives sont réactivées à la fin.
+- **Plages interdites** (Paramètres › Plages interdites) : jours et heures (heure de Home Assistant) où l'on ne peut ni
+  planifier ni démarrer de maintenance ; le refus est expliqué. Une plage dont la fin précède le début passe minuit ; aucun
+  jour coché = tous les jours. **Seul le propriétaire** peut déroger (case dans le formulaire) ; la dérogation est écrite dans
+  le journal et conservée dans l'historique. Les services `start` / `schedule` ne peuvent pas déroger. Le contrôle porte
+  sur l'instant de début : une maintenance déjà planifiée n'est pas annulée si une plage est ajoutée ensuite, et les
+  occurrences suivantes d'une répétition ne sont pas revérifiées.
 - **Durée maximale** (Paramètres › Page de maintenance ; réglable aussi par modèle et par maintenance) : une maintenance sans
   fin s'arrête d'elle-même à cette durée (rappel « avant la fin » puis notification de fin, historique « arrêtée à la durée
   maximale »). Vide = valeur par défaut des paramètres, `0` = sans limite. Une fin explicite plus lointaine que le maximum

@@ -83,6 +83,7 @@ async def ws_preview(hass, connection, msg, manager) -> dict[str, Any]:
         vol.Optional("pages", default=[]): PAGES,
         vol.Optional("pause_automations", default=True): cv.boolean,
         vol.Optional("max_minutes"): MAX_MINUTES,
+        vol.Optional("override_blackout", default=False): cv.boolean,
     }
 )
 @_command("control")
@@ -94,6 +95,7 @@ async def ws_start(hass, connection, msg, manager) -> dict[str, Any]:
         pause=msg["pause_automations"],
         by=connection.user.name or "",
         max_minutes=msg.get("max_minutes"),
+        override_blackout=_override(connection, msg),
     )
     return manager.state_for(connection.user)
 
@@ -121,6 +123,13 @@ async def ws_update_current(hass, connection, msg, manager) -> dict[str, Any]:
     return manager.state_for(connection.user)
 
 
+def _override(connection, msg) -> bool:
+    """Dérogation à une plage interdite : réservée au propriétaire."""
+    if msg.get("override_blackout") and not connection.user.is_owner:
+        raise Unauthorized
+    return bool(msg.get("override_blackout"))
+
+
 _WINDOW_FIELDS = {
     vol.Required("start"): cv.datetime,
     vol.Optional("end"): DATETIME,
@@ -129,6 +138,7 @@ _WINDOW_FIELDS = {
     vol.Optional("pause_automations", default=True): cv.boolean,
     vol.Optional("repeat", default="none"): vol.In(REPEATS),
     vol.Optional("max_minutes"): MAX_MINUTES,
+    vol.Optional("override_blackout", default=False): cv.boolean,
 }
 
 
@@ -145,6 +155,7 @@ async def ws_add_window(hass, connection, msg, manager) -> dict[str, Any]:
         pause=msg["pause_automations"],
         repeat=msg["repeat"],
         max_minutes=msg.get("max_minutes"),
+        override_blackout=_override(connection, msg),
     )
     return manager.state_for(connection.user)
 
@@ -167,6 +178,7 @@ async def ws_update_window(hass, connection, msg, manager) -> dict[str, Any]:
         pause=msg["pause_automations"],
         repeat=msg["repeat"],
         max_minutes=msg.get("max_minutes"),
+        override_blackout=_override(connection, msg),
     )
     return manager.state_for(connection.user)
 

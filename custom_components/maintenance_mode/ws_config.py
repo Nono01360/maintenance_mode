@@ -26,6 +26,15 @@ _TEMPLATE = vol.Schema(
         vol.Optional("max_minutes"): vol.Any(None, vol.All(vol.Coerce(int), vol.Range(min=0, max=MAX_DURATION_MINUTES))),
     }
 )
+_BLACKOUT = vol.Schema(
+    {
+        vol.Optional("id"): ID,
+        vol.Optional("name", default=""): vol.All(cv.string, vol.Length(max=100)),
+        vol.Optional("days", default=[]): bounded_list(vol.All(vol.Coerce(int), vol.Range(min=0, max=6)), 7),
+        vol.Required("start"): vol.All(cv.string, vol.Length(max=5)),
+        vol.Required("end"): vol.All(cv.string, vol.Length(max=5)),
+    }
+)
 _ROLE = vol.Schema(
     {
         vol.Optional("id"): ID,
@@ -47,6 +56,7 @@ _CONFIG_PERMS = {
     "banner_scroll": "settings",
     "compat_mode": "settings",
     "max_duration_minutes": "settings",
+    "blackouts": "settings",
     "selected_labels": "settings",
     "selected_areas": "settings",
     "excluded_automations": "settings",
@@ -70,6 +80,7 @@ _CONFIG_PERMS = {
         vol.Optional("banner_mode"): vol.In(BANNER_MODES),
         vol.Optional("banner_scroll"): cv.boolean,
         vol.Optional("compat_mode"): cv.boolean,
+        vol.Optional("blackouts"): bounded_list(_BLACKOUT, MAX_LIST),
         vol.Optional("max_duration_minutes"): vol.All(vol.Coerce(int), vol.Range(min=0, max=MAX_DURATION_MINUTES)),
         vol.Optional("selected_labels"): bounded_list(ID, MAX_LIST),
         vol.Optional("selected_areas"): bounded_list(ID, MAX_LIST),
