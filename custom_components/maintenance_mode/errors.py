@@ -32,6 +32,7 @@ CATALOG: dict[str, dict[str, str]] = {
         "access_denied": "Accès refusé.",
         "max_duration_exceeded": "La durée dépasse la durée maximale ({max} min).",
         "blackout_period": "Cette période est interdite pour une maintenance ({name}).",
+        "confirmation_required": "Cette action suspendra {count} automatisations : confirmation requise.",
         "rate_limited": "Trop de modifications en peu de temps : réessaie dans quelques secondes.",
     },
     "en": {
@@ -56,6 +57,7 @@ CATALOG: dict[str, dict[str, str]] = {
         "access_denied": "Access denied.",
         "max_duration_exceeded": "The duration exceeds the maximum duration ({max} min).",
         "blackout_period": "This period is forbidden for maintenance ({name}).",
+        "confirmation_required": "This action will pause {count} automations: confirmation required.",
         "rate_limited": "Too many changes in a short time: try again in a few seconds.",
     },
 }

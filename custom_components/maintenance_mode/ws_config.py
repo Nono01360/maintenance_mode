@@ -9,7 +9,7 @@ from homeassistant.components import websocket_api
 from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import config_validation as cv
 
-from .const import BANNER_MODES, MAX_DURATION_MINUTES, NOTIFY_KINDS, PERMISSIONS, REPEATS
+from .const import BANNER_MODES, MAX_CONFIRM_THRESHOLD, MAX_DURATION_MINUTES, NOTIFY_KINDS, PERMISSIONS, REPEATS
 from .limits import ID, MAX_ENTITIES, MAX_LIST, MAX_USERS, PAGES, TEXT, bounded_list
 from .ws_common import _command
 
@@ -57,6 +57,7 @@ _CONFIG_PERMS = {
     "compat_mode": "settings",
     "max_duration_minutes": "settings",
     "blackouts": "settings",
+    "confirm_threshold": "settings",
     "selected_labels": "settings",
     "selected_areas": "settings",
     "excluded_automations": "settings",
@@ -80,6 +81,7 @@ _CONFIG_PERMS = {
         vol.Optional("banner_mode"): vol.In(BANNER_MODES),
         vol.Optional("banner_scroll"): cv.boolean,
         vol.Optional("compat_mode"): cv.boolean,
+        vol.Optional("confirm_threshold"): vol.All(vol.Coerce(int), vol.Range(min=0, max=MAX_CONFIRM_THRESHOLD)),
         vol.Optional("blackouts"): bounded_list(_BLACKOUT, MAX_LIST),
         vol.Optional("max_duration_minutes"): vol.All(vol.Coerce(int), vol.Range(min=0, max=MAX_DURATION_MINUTES)),
         vol.Optional("selected_labels"): bounded_list(ID, MAX_LIST),

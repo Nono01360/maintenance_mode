@@ -12,6 +12,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    DEFAULT_CONFIRM_THRESHOLD,
     DOMAIN,
     DEFAULT_END_SOON_MINUTES,
     DEFAULT_MESSAGE,
@@ -131,6 +132,7 @@ def default_config() -> dict[str, Any]:
         "selected_areas": [],         # zones dont les automatisations sont visées
         "excluded_automations": [],   # jamais suspendues, même si sélectionnées
         "excluded_labels": [],        # idem pour toutes les automatisations portant une de ces étiquettes
+        "confirm_threshold": DEFAULT_CONFIRM_THRESHOLD,   # confirmation explicite au-delà de ce nombre (0 = jamais)
         "blackouts": [],             # plages interdites : [{id, name, days, start, end}]
         "max_duration_minutes": 0,   # durée maximale par défaut (minutes) ; 0 = aucune
         "compat_mode": False,    # True : aucune modification de la structure interne du frontend de HA

@@ -84,6 +84,7 @@ async def ws_preview(hass, connection, msg, manager) -> dict[str, Any]:
         vol.Optional("pause_automations", default=True): cv.boolean,
         vol.Optional("max_minutes"): MAX_MINUTES,
         vol.Optional("override_blackout", default=False): cv.boolean,
+        vol.Optional("confirm", default=False): cv.boolean,
     }
 )
 @_command("control")
@@ -96,6 +97,7 @@ async def ws_start(hass, connection, msg, manager) -> dict[str, Any]:
         by=connection.user.name or "",
         max_minutes=msg.get("max_minutes"),
         override_blackout=_override(connection, msg),
+        confirmed=msg["confirm"],
     )
     return manager.state_for(connection.user)
 
@@ -139,6 +141,7 @@ _WINDOW_FIELDS = {
     vol.Optional("repeat", default="none"): vol.In(REPEATS),
     vol.Optional("max_minutes"): MAX_MINUTES,
     vol.Optional("override_blackout", default=False): cv.boolean,
+    vol.Optional("confirm", default=False): cv.boolean,
 }
 
 
@@ -156,6 +159,7 @@ async def ws_add_window(hass, connection, msg, manager) -> dict[str, Any]:
         repeat=msg["repeat"],
         max_minutes=msg.get("max_minutes"),
         override_blackout=_override(connection, msg),
+        confirmed=msg["confirm"],
     )
     return manager.state_for(connection.user)
 
@@ -179,6 +183,7 @@ async def ws_update_window(hass, connection, msg, manager) -> dict[str, Any]:
         repeat=msg["repeat"],
         max_minutes=msg.get("max_minutes"),
         override_blackout=_override(connection, msg),
+        confirmed=msg["confirm"],
     )
     return manager.state_for(connection.user)
 

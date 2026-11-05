@@ -111,10 +111,11 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
     # ------------------------------------------------------------------ actions
     async def async_start_now(
         self, *, end: datetime | None, reason: str, pages: list[str], pause: bool, by: str = "",
-        max_minutes: int | None = None, override_blackout: bool = False,
+        max_minutes: int | None = None, override_blackout: bool = False, confirmed: bool = True,
     ) -> None:
         async with self._lock:
             end = self._check_end(end)
+            self._check_confirmation(pause, confirmed)
             overridden = self._check_blackout(dt_util.utcnow(), override=override_blackout, by=by)
             max_minutes = self._clean_max(max_minutes)
             self._check_max_duration(dt_util.utcnow(), end, max_minutes)
@@ -170,8 +171,10 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
         repeat: str = "none",
         max_minutes: int | None = None,
         override_blackout: bool = False,
+        confirmed: bool = True,
     ) -> Window:
         async with self._lock:
+            self._check_confirmation(pause, confirmed)
             if len(self.schedule) >= MAX_WINDOWS:
                 raise MaintenanceError("max_windows", max=MAX_WINDOWS)
             start, end = self._check_window(start, end, ignore_id=None)
@@ -207,8 +210,10 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
         repeat: str = "none",
         max_minutes: int | None = None,
         override_blackout: bool = False,
+        confirmed: bool = True,
     ) -> None:
         async with self._lock:
+            self._check_confirmation(pause, confirmed)
             window = self._find(window_id)
             start, end = self._check_window(start, end, ignore_id=window_id)
             window.blackout_override = self._check_blackout(start, override=override_blackout)

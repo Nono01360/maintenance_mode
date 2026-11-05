@@ -84,3 +84,7 @@ MAX_EXCLUDED_LABELS = 200
 
 # Durée maximale d'une maintenance (minutes) : 0 = aucune limite
 MAX_DURATION_MINUTES = 525600
+
+# Confirmation renforcée : à partir de ce nombre d'automatisations à suspendre (0 = jamais)
+DEFAULT_CONFIRM_THRESHOLD = 20
+MAX_CONFIRM_THRESHOLD = 10000

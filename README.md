@@ -58,6 +58,10 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
   `config/devices`, …). Un chemin bloque aussi ses sous-pages.
 - **Automatisations** : si aucune n'est sélectionnée, **toutes** sont suspendues. Seules celles qui étaient
   actives sont réactivées à la fin.
+- **Confirmation renforcée** : une action qui suspendrait beaucoup d'automatisations (seuil réglable, 20 par défaut,
+  `0` = jamais ; les protégées ne comptent pas) demande une confirmation explicite dans le panneau, avec le nombre exact.
+  Le serveur la refuse sans `confirm` (démarrer, planifier, modifier). Les services, appelés volontairement par un
+  administrateur ou une automatisation, ne la demandent pas.
 - **Plages interdites** (Paramètres › Plages interdites) : jours et heures (heure de Home Assistant) où l'on ne peut ni
   planifier ni démarrer de maintenance ; le refus est expliqué. Une plage dont la fin précède le début passe minuit ; aucun
   jour coché = tous les jours. **Seul le propriétaire** peut déroger (case dans le formulaire) ; la dérogation est écrite dans

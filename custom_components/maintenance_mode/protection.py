@@ -1,6 +1,7 @@
 """Protections : quelles automatisations sont suspendues, lesquelles sont toujours épargnées."""
 from __future__ import annotations
 
+from .errors import MaintenanceError
 from .window import clean_pages
 
 from typing import Any
@@ -113,3 +114,12 @@ class ProtectionMixin:
             "blocked_users": sorted(u["name"] for u in self.users if u["id"] not in exempt),
             "notifications": {"services": len(services), "kinds": list(self.config["notify_kinds"]) if services else []},
         }
+
+    def _check_confirmation(self, pause: bool, confirmed: bool) -> None:
+        """Action large (beaucoup d'automatisations à suspendre) : exige une confirmation explicite du client."""
+        limit = self.config["confirm_threshold"]
+        if confirmed or not pause or not limit:
+            return
+        count = len(self.plan_suspension()["suspend"])
+        if count >= limit:
+            raise MaintenanceError("confirmation_required", count=count)

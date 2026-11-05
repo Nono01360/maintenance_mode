@@ -75,6 +75,8 @@ const T = {
     s_autos_n: "{n} sélectionnée(s) : seules celles-ci sont coupées.",
     s_autos_all: "Aucune sélectionnée : <b>toutes</b> les automatisations sont coupées pendant la maintenance.",
     s_autos_sel: "Aucune sélection individuelle : les étiquettes et zones choisies ci-dessous déterminent les automatisations coupées.",
+    confirm_box: "Action large : {n} automatisations seraient suspendues. Vérifie l'aperçu, puis confirme.", confirm_save: "Confirmer et enregistrer",
+    s_confirm: "Confirmation explicite à partir de (automatisations suspendues, 0 = jamais)",
     s_blackout: "Plages interdites", bo_hint: "Jours et heures où l'on ne peut ni planifier ni démarrer de maintenance (heure de Home Assistant ; fin avant début = la plage passe minuit ; aucun jour coché = tous les jours). Seul le propriétaire peut déroger.",
     bo_add: "Ajouter une plage", bo_none: "Aucune plage interdite.", bo_name_ph: "Nom (ex. Nuit)", bo_from: "de", bo_to: "à",
     bo_days: ["L", "M", "M", "J", "V", "S", "D"], bo_override: "Déroger aux plages interdites (propriétaire, journalisé)",
@@ -139,6 +141,7 @@ const T = {
     err_access_denied: "Accès refusé.",
     err_max_duration_exceeded: "La durée dépasse la durée maximale ({max} min).",
     err_blackout_period: "Cette période est interdite pour une maintenance ({name}).",
+    err_confirmation_required: "Cette action suspendra {count} automatisations : confirmation requise.",
     err_rate_limited: "Trop de modifications en peu de temps : réessaie dans quelques secondes.",
     banner_hint: "Sans défilement, le texte passe à la ligne (avec un ascenseur s'il est très long). Le bandeau repousse l'interface vers le bas ; en cas de problème d'affichage, choisis la petite carte.",
     s_protect: "Protections", protect_hint: "Ces automatisations ne sont JAMAIS suspendues, même si elles sont sélectionnées ci-dessus ou si « toutes » sont visées.",
@@ -180,6 +183,8 @@ const T = {
     s_autos_n: "{n} selected: only these are turned off.",
     s_autos_all: "None selected: <b>all</b> automations are turned off during maintenance.",
     s_autos_sel: "No individual selection: the labels and areas chosen below determine which automations are turned off.",
+    confirm_box: "Large action: {n} automations would be paused. Check the preview, then confirm.", confirm_save: "Confirm and save",
+    s_confirm: "Require explicit confirmation from (automations paused, 0 = never)",
     s_blackout: "Forbidden periods", bo_hint: "Days and hours when no maintenance can be scheduled or started (Home Assistant time; end before start = the period crosses midnight; no day ticked = every day). Only the owner can override.",
     bo_add: "Add a period", bo_none: "No forbidden period.", bo_name_ph: "Name (e.g. Night)", bo_from: "from", bo_to: "to",
     bo_days: ["M", "T", "W", "T", "F", "S", "S"], bo_override: "Override forbidden periods (owner, logged)",
@@ -244,6 +249,7 @@ const T = {
     err_access_denied: "Access denied.",
     err_max_duration_exceeded: "The duration exceeds the maximum duration ({max} min).",
     err_blackout_period: "This period is forbidden for maintenance ({name}).",
+    err_confirmation_required: "This action will pause {count} automations: confirmation required.",
     err_rate_limited: "Too many changes in a short time: try again in a few seconds.",
     banner_hint: "Without scrolling, the text wraps (with a scrollbar if very long). The banner pushes the interface down; if the display looks wrong, choose the small card.",
     s_protect: "Protections", protect_hint: "These automations are NEVER paused, even if selected above or if \"all\" are targeted.",
@@ -445,6 +451,7 @@ class MaintenanceModePanel extends HTMLElement {
         banner_scroll: d.config.banner_scroll !== false,
         compat_mode: d.config.compat_mode === true,
         max_duration_minutes: Number(d.config.max_duration_minutes) || 0,
+        confirm_threshold: Number(d.config.confirm_threshold ?? 20),
         blackouts: (d.config.blackouts || []).map((b) => ({ id: b.id, name: b.name, days: [...b.days], start: b.start, end: b.end })),
         excluded_automations: [...(d.config.excluded_automations || [])],
         excluded_labels: [...(d.config.excluded_labels || [])],
@@ -472,11 +479,13 @@ class MaintenanceModePanel extends HTMLElement {
 
   async _call(type, payload = {}) {
     this._error = "";
+    this._lastErr = null;
     try {
       const res = await this._hass.callWS({ type: `maintenance_mode/${type}`, ...payload });
       if (res && res.role) this._onData(res);
       return true;
     } catch (err) {
+      this._lastErr = err;
       this._error = this._errText(err);
       this._render(true);
       return false;
@@ -784,8 +793,9 @@ class MaintenanceModePanel extends HTMLElement {
         <span>${this._t("pause_autos")}</span></label>` : ""}
       ${f.mode !== "current" && this._hass?.user?.is_owner ? `<label class="check"><input type="checkbox" data-action="form-override" ${f.override ? "checked" : ""}><span>${this._t("bo_override")}</span></label>` : ""}
       ${showPause ? `<div><button class="btn sm" data-action="preview-form">${this._t("pv_button")}</button></div>${this._previewHtml()}` : ""}
+      ${f.needsConfirm ? `<div class="banner error"><b>${this._t("confirm_box", { n: f.needsConfirm })}</b></div>` : ""}
       <div class="actions" style="margin-top:0">
-        <button class="btn primary" data-action="save-form">${this._t("save")}</button>
+        <button class="btn primary" data-action="save-form">${this._t(f.needsConfirm ? "confirm_save" : "save")}</button>
         <button class="btn" data-action="cancel-form">${this._t("cancel")}</button>
       </div>
       ${showTpl && this._can("templates") ? `<div class="row">
@@ -816,6 +826,8 @@ class MaintenanceModePanel extends HTMLElement {
           <textarea maxlength="255" data-field="draft.message">${esc(dr.message)}</textarea></label>
         <label class="field">${this._t("s_maxdur")}
           <input type="number" min="0" max="525600" data-field="draft.maxdur" value="${esc(dr.max_duration_minutes)}"></label>
+        <label class="field">${this._t("s_confirm")}
+          <input type="number" min="0" max="10000" data-field="draft.confirm" value="${esc(dr.confirm_threshold)}"></label>
         <label class="field">${this._t("s_warn")}
           <input type="number" min="1" max="1440" data-field="draft.warn" value="${esc(dr.warn_minutes)}"></label>
       </div></ha-card>
@@ -1092,6 +1104,7 @@ class MaintenanceModePanel extends HTMLElement {
     else if (field === "bo.name") { this._draft.blackouts[Number(t.dataset.idx)].name = t.value; this._markDirty(); }
     else if (field === "bo.start") { this._draft.blackouts[Number(t.dataset.idx)].start = t.value; this._markDirty(); }
     else if (field === "bo.end") { this._draft.blackouts[Number(t.dataset.idx)].end = t.value; this._markDirty(); }
+    else if (field === "draft.confirm") { this._draft.confirm_threshold = Number(t.value) || 0; this._markDirty(); }
     else if (field === "draft.maxdur") { this._draft.max_duration_minutes = Number(t.value) || 0; this._markDirty(); }
     else if (field === "draft.warn") { this._draft.warn_minutes = Number(t.value) || 15; this._markDirty(); }
     else if (field === "draft.endsoon") { this._draft.end_soon_minutes = Number(t.value) || 10; this._markDirty(); }
@@ -1154,7 +1167,7 @@ class MaintenanceModePanel extends HTMLElement {
       pause: w ? w.pause_automations !== false : true,
       repeat: w?.repeat || "none",
       max: w && w.max_minutes != null ? String(w.max_minutes) : "",
-      override: false,
+      override: false, needsConfirm: 0, confirm: false,
     };
     this._error = "";
     this._preview = null;
@@ -1262,7 +1275,7 @@ async _act(action, target) {
     } else if (action === "save-template") {
       this._saveTemplate();
     } else if (action === "scope") {
-      this._form.scope = target.value; this._preview = null;
+      this._form.scope = target.value; this._preview = null; this._form.needsConfirm = 0; this._form.confirm = false;
       this._render(true);
     } else if (action === "toggle-page") {
       this._toggle(this._form.pages, target.dataset.page); this._preview = null;
@@ -1279,7 +1292,7 @@ async _act(action, target) {
     } else if (action === "form-repeat") {
       this._form.repeat = target.value;
     } else if (action === "form-pause") {
-      this._form.pause = target.checked; this._preview = null;
+      this._form.pause = target.checked; this._preview = null; this._form.needsConfirm = 0; this._form.confirm = false; this._render(true);
     } else if (action === "toggle-auto") {
       this._toggle(this._draft.automations, target.dataset.id);
       this._markDirty();
@@ -1310,6 +1323,7 @@ async _act(action, target) {
         banner_scroll: this._draft.banner_scroll,
         compat_mode: this._draft.compat_mode,
         max_duration_minutes: Number(this._draft.max_duration_minutes) || 0,
+        confirm_threshold: Number(this._draft.confirm_threshold) || 0,
         blackouts: this._draft.blackouts.map((b) => ({ ...(b.id ? { id: b.id } : {}), name: b.name.trim(), days: b.days, start: b.start, end: b.end })),
         excluded_automations: this._draft.excluded_automations,
         excluded_labels: this._draft.excluded_labels,
@@ -1429,7 +1443,7 @@ async _act(action, target) {
     }
     const iso = (v) => (v ? this._toDate(v)?.toISOString() ?? null : null);
     const base = { reason: f.reason.trim(), pages: f.scope === "pages" ? f.pages : [] };
-    const ovr = f.override && this._hass?.user?.is_owner ? { override_blackout: true } : {};
+    const ovr = { ...(f.override && this._hass?.user?.is_owner ? { override_blackout: true } : {}), ...(f.needsConfirm ? { confirm: true } : {}) };
     const end = iso(f.end);
     let ok;
     
@@ -1453,6 +1467,9 @@ async _act(action, target) {
     
     if (ok) {
       this._form = null;
+      this._render(true);
+    } else if (this._lastErr?.translation_key === "confirmation_required") {
+      f.needsConfirm = Number(this._lastErr.translation_placeholders?.count) || 1;   // le prochain clic confirme
       this._render(true);
     }
   }
