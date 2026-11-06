@@ -75,6 +75,7 @@ const T = {
     s_autos_n: "{n} sélectionnée(s) : seules celles-ci sont coupées.",
     s_autos_all: "Aucune sélectionnée : <b>toutes</b> les automatisations sont coupées pendant la maintenance.",
     s_autos_sel: "Aucune sélection individuelle : les étiquettes et zones choisies ci-dessous déterminent les automatisations coupées.",
+    undo: "Annuler", undo_window: "Maintenance supprimée.", undo_template: "Modèle supprimé.",
     confirm_box: "Action large : {n} automatisations seraient suspendues. Vérifie l'aperçu, puis confirme.", confirm_save: "Confirmer et enregistrer",
     s_confirm: "Confirmation explicite à partir de (automatisations suspendues, 0 = jamais)",
     s_blackout: "Plages interdites", bo_hint: "Jours et heures où l'on ne peut ni planifier ni démarrer de maintenance (heure de Home Assistant ; fin avant début = la plage passe minuit ; aucun jour coché = tous les jours). Seul le propriétaire peut déroger.",
@@ -142,6 +143,8 @@ const T = {
     err_max_duration_exceeded: "La durée dépasse la durée maximale ({max} min).",
     err_blackout_period: "Cette période est interdite pour une maintenance ({name}).",
     err_confirmation_required: "Cette action suspendra {count} automatisations : confirmation requise.",
+    err_undo_expired: "Le délai d'annulation est dépassé (ou l'élément ne peut plus être restauré).",
+    err_template_not_found: "Modèle introuvable.",
     err_rate_limited: "Trop de modifications en peu de temps : réessaie dans quelques secondes.",
     banner_hint: "Sans défilement, le texte passe à la ligne (avec un ascenseur s'il est très long). Le bandeau repousse l'interface vers le bas ; en cas de problème d'affichage, choisis la petite carte.",
     s_protect: "Protections", protect_hint: "Ces automatisations ne sont JAMAIS suspendues, même si elles sont sélectionnées ci-dessus ou si « toutes » sont visées.",
@@ -183,6 +186,7 @@ const T = {
     s_autos_n: "{n} selected: only these are turned off.",
     s_autos_all: "None selected: <b>all</b> automations are turned off during maintenance.",
     s_autos_sel: "No individual selection: the labels and areas chosen below determine which automations are turned off.",
+    undo: "Undo", undo_window: "Maintenance deleted.", undo_template: "Template deleted.",
     confirm_box: "Large action: {n} automations would be paused. Check the preview, then confirm.", confirm_save: "Confirm and save",
     s_confirm: "Require explicit confirmation from (automations paused, 0 = never)",
     s_blackout: "Forbidden periods", bo_hint: "Days and hours when no maintenance can be scheduled or started (Home Assistant time; end before start = the period crosses midnight; no day ticked = every day). Only the owner can override.",
@@ -250,6 +254,8 @@ const T = {
     err_max_duration_exceeded: "The duration exceeds the maximum duration ({max} min).",
     err_blackout_period: "This period is forbidden for maintenance ({name}).",
     err_confirmation_required: "This action will pause {count} automations: confirmation required.",
+    err_undo_expired: "The undo period has passed (or the item can no longer be restored).",
+    err_template_not_found: "Template not found.",
     err_rate_limited: "Too many changes in a short time: try again in a few seconds.",
     banner_hint: "Without scrolling, the text wraps (with a scrollbar if very long). The banner pushes the interface down; if the display looks wrong, choose the small card.",
     s_protect: "Protections", protect_hint: "These automations are NEVER paused, even if selected above or if \"all\" are targeted.",
@@ -412,6 +418,7 @@ class MaintenanceModePanel extends HTMLElement {
 
   disconnectedCallback() {
     clearInterval(this._timer);
+    clearTimeout(this._undoTimer);
     if (this._unsub) { this._unsub(); this._unsub = null; }
   }
 
@@ -470,6 +477,20 @@ class MaintenanceModePanel extends HTMLElement {
     this._render();
   }
 
+  // Suppression annulable quelques secondes (le serveur garde l'élément en mémoire)
+  _startUndo(u) {
+    clearTimeout(this._undoTimer);
+    this._undo = { token: u.token, kind: u.kind };
+    this._undoTimer = setTimeout(() => { this._undo = null; this._render(); }, (Number(u.seconds) || 10) * 1000);
+  }
+
+  _undoHtml() {
+    if (!this._undo) return "";
+    return `<div class="banner" style="display:flex;align-items:center;gap:12px;background:var(--secondary-background-color)">
+      <span class="grow">${this._t(this._undo.kind === "template" ? "undo_template" : "undo_window")}</span>
+      <button class="btn sm" data-action="undo-delete">${this._t("undo")}</button></div>`;
+  }
+
   // Erreur du serveur : traduite d'après son code stable (`translation_key`), sinon le texte reçu
   _errText(err) {
     const key = err?.translation_key;
@@ -482,6 +503,7 @@ class MaintenanceModePanel extends HTMLElement {
     this._lastErr = null;
     try {
       const res = await this._hass.callWS({ type: `maintenance_mode/${type}`, ...payload });
+      if (res && res.undo) this._startUndo(res.undo);
       if (res && res.role) this._onData(res);
       return true;
     } catch (err) {
@@ -581,7 +603,7 @@ class MaintenanceModePanel extends HTMLElement {
     root.innerHTML = `<style>${STYLES}</style>
       <div class="shell">
         ${this._barHtml()}
-        <div class="scroll"><div class="wrap">${this._bodyHtml()}</div></div>
+        <div class="scroll"><div class="wrap">${this._undoHtml()}${this._bodyHtml()}</div></div>
       </div>`;
 
     const apply = () => {
@@ -1341,8 +1363,7 @@ async _act(action, target) {
     } else if (action === "delete-template") {
       const id = target.dataset.id;
       if (this._confirm === "tpl:" + id) {
-        const templates = (this._data.config?.templates || []).filter((x) => x.id !== id);
-        this._call("update_config", { templates });
+        this._call("delete_template", { template_id: id });
         this._confirm = null;
       } else {
         this._confirm = "tpl:" + id;
@@ -1362,6 +1383,12 @@ async _act(action, target) {
         this._error = "";
       } catch (err) { this._preview = null; this._error = this._errText(err); }
       this._render(true);
+    } else if (action === "undo-delete") {
+      const u = this._undo;
+      this._undo = null;
+      clearTimeout(this._undoTimer);
+      if (u) await this._call("undo_delete", { token: u.token });
+      else this._render(true);
     } else if (action === "add-blackout") {
       this._draft.blackouts.push({ id: null, name: "", days: [], start: "22:00", end: "06:00" });
       this._markDirty(); this._render(true);

@@ -33,6 +33,8 @@ CATALOG: dict[str, dict[str, str]] = {
         "max_duration_exceeded": "La durée dépasse la durée maximale ({max} min).",
         "blackout_period": "Cette période est interdite pour une maintenance ({name}).",
         "confirmation_required": "Cette action suspendra {count} automatisations : confirmation requise.",
+        "undo_expired": "Le délai d'annulation est dépassé (ou l'élément ne peut plus être restauré).",
+        "template_not_found": "Modèle introuvable.",
         "rate_limited": "Trop de modifications en peu de temps : réessaie dans quelques secondes.",
     },
     "en": {
@@ -58,6 +60,8 @@ CATALOG: dict[str, dict[str, str]] = {
         "max_duration_exceeded": "The duration exceeds the maximum duration ({max} min).",
         "blackout_period": "This period is forbidden for maintenance ({name}).",
         "confirmation_required": "This action will pause {count} automations: confirmation required.",
+        "undo_expired": "The undo period has passed (or the item can no longer be restored).",
+        "template_not_found": "Template not found.",
         "rate_limited": "Too many changes in a short time: try again in a few seconds.",
     },
 }

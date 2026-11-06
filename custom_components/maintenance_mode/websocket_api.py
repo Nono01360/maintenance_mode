@@ -196,7 +196,26 @@ async def ws_update_window(hass, connection, msg, manager) -> dict[str, Any]:
 )
 @_command("schedule")
 async def ws_delete_window(hass, connection, msg, manager) -> dict[str, Any]:
-    await manager.async_delete_window(msg["window_id"])
+    undo = await manager.async_delete_window(msg["window_id"])
+    return {**manager.state_for(connection.user), "undo": undo}
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "maintenance_mode/delete_template", vol.Required("template_id"): ID}
+)
+@_command("templates")
+async def ws_delete_template(hass, connection, msg, manager) -> dict[str, Any]:
+    undo = await manager.async_delete_template(msg["template_id"])
+    return {**manager.state_for(connection.user), "undo": undo}
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "maintenance_mode/undo_delete", vol.Required("token"): ID}
+)
+@_command()
+async def ws_undo_delete(hass, connection, msg, manager) -> dict[str, Any]:
+    """Annule une suppression récente (quelques secondes) ; le droit requis dépend de l'élément restauré."""
+    await manager.async_undo(msg["token"], manager.perms_for(connection.user))
     return manager.state_for(connection.user)
 
 
@@ -231,6 +250,8 @@ COMMANDS = (
     ws_add_window,
     ws_update_window,
     ws_delete_window,
+    ws_delete_template,
+    ws_undo_delete,
     ws_delete_history,
     ws_clear_history,
     ws_update_config,

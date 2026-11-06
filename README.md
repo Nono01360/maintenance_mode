@@ -62,6 +62,10 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
   `0` = jamais ; les protégées ne comptent pas) demande une confirmation explicite dans le panneau, avec le nombre exact.
   Le serveur la refuse sans `confirm` (démarrer, planifier, modifier). Les services, appelés volontairement par un
   administrateur ou une automatisation, ne la demandent pas.
+- **Annuler une suppression** : après la suppression d'une maintenance planifiée ou d'un modèle, un bandeau « Annuler »
+  reste affiché 10 secondes ; l'élément revient à l'identique (même identifiant, même série). Il n'est gardé qu'en mémoire
+  (jamais écrit sur le disque) ; l'annulation est refusée si le délai est passé, si le créneau a été pris entre-temps ou si
+  l'appelant n'a pas le droit de gérer cet élément.
 - **Plages interdites** (Paramètres › Plages interdites) : jours et heures (heure de Home Assistant) où l'on ne peut ni
   planifier ni démarrer de maintenance ; le refus est expliqué. Une plage dont la fin précède le début passe minuit ; aucun
   jour coché = tous les jours. **Seul le propriétaire** peut déroger (case dans le formulaire) ; la dérogation est écrite dans

@@ -21,6 +21,7 @@ from .settings import SettingsMixin
 from .storage import STORAGE_VERSION, MaintenanceStore, StorageMixin, default_config
 from .planning import PlanningMixin
 from .blackout import BlackoutMixin
+from .trash import TrashMixin
 from .validation import ValidationMixin
 from .suspension import SuspensionMixin
 from .notifications import NotificationsMixin
@@ -53,7 +54,7 @@ def get_manager(hass: HomeAssistant) -> MaintenanceManager | None:
     return None
 
 
-class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, ValidationMixin, BlackoutMixin, PlanningMixin, StorageMixin, SettingsMixin, ProtectionMixin):
+class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, ValidationMixin, BlackoutMixin, TrashMixin, PlanningMixin, StorageMixin, SettingsMixin, ProtectionMixin):
     """Source de vérité unique ; entités, panneau, services et calendrier la reflètent."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -74,6 +75,7 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
         self._lock = asyncio.Lock()
         self._config_limiter = RateLimiter(CONFIG_WRITES_PER_MINUTE, 60)
         self._unloaded = False
+        self._trash: dict[str, dict] = {}     # suppressions annulables (mémoire seulement)
 
     # ------------------------------------------------------------------ chargement
     @callback
@@ -229,10 +231,15 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
             self.schedule.sort(key=lambda w: w.start)
             await self._commit()
 
-    async def async_delete_window(self, window_id: str) -> None:
+    async def async_delete_window(self, window_id: str) -> dict[str, Any]:
+        """Supprime une maintenance planifiée ; renvoie de quoi l'annuler pendant quelques secondes."""
         async with self._lock:
-            self.schedule.remove(self._find(window_id))
+            window = self._find(window_id)
+            index = self.schedule.index(window)
+            self.schedule.remove(window)
+            undo = self._stash("window", window, index)
             await self._commit()
+            return undo
 
     # ------------------------------------------------------------------ validation
     # ------------------------------------------------------------------ interne
