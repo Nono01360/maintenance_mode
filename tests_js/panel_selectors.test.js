@@ -28,7 +28,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(sr.textContent.includes("toutes") && !sr.textContent.includes("Aucune sélection individuelle"), "plus aucun sélecteur : retour au message « toutes »");
   sr.querySelector("input[data-action=toggle-sel-label][data-label=lab1]").click(); await sleep(20);
   sr.querySelector("input[data-action=toggle-sel-area][data-area=area2]").click(); await sleep(20);
-  sr.querySelector("[data-action=save-settings]").click(); await sleep(30);
+  sr.querySelector("[data-action=save-block][data-block=select]").click(); await sleep(30);
   const cfg = calls.filter((c) => c.type === "maintenance_mode/update_config" && "selected_labels" in c).pop();
   ok(cfg && cfg.selected_labels.join() === "lab1" && cfg.selected_areas.join() === "area2", "enregistrement : selected_labels et selected_areas");
   console.log(fail ? `\n${fail} ÉCHEC(S)` : "\nTOUT PASSE"); process.exit(fail ? 1 : 0);

@@ -89,7 +89,7 @@ const tabs = (sr) => [...sr.querySelectorAll(".tab")].map((t) => t.dataset.tab).
   await panel(["templates"], async ({ sr }) => {
     ok(tabs(sr) === "list,settings", "modèles seuls : onglet Paramètres visible, pas Accès");
     sr.querySelector("[data-tab=settings]").click(); await sleep(10);
-    ok(sr.textContent.includes("Modèles") && !has(sr, "[data-field='draft.message']") && !has(sr, "[data-action=save-settings]"), "modèles seuls : uniquement la carte des modèles");
+    ok(sr.textContent.includes("Modèles") && !has(sr, "[data-field='draft.message']") && !has(sr, "[data-action=save-block]"), "modèles seuls : uniquement la carte des modèles");
   });
   await panel(["settings"], async ({ sr, calls, w }) => {
     ok(tabs(sr) === "list,settings", "paramètres seuls : onglet Paramètres, pas Accès");
@@ -102,7 +102,7 @@ const tabs = (sr) => [...sr.querySelectorAll(".tab")].map((t) => t.dataset.tab).
     ok(sel && sel.value === "bar", "option d'affichage : bandeau sélectionné par défaut");
     sel.value = "card"; sel.dispatchEvent(new w.Event("change", { bubbles: true })); await sleep(10);
     const sc = sr.querySelector("input[data-action=toggle-banner-scroll]"); sc.checked = false; sc.dispatchEvent(new w.Event("change", { bubbles: true })); await sleep(10);
-    sr.querySelector("[data-action=save-settings]").click(); await sleep(20);
+    sr.querySelector("[data-action=save-block][data-block=banner]").click(); await sleep(20);
     const cfg = calls.filter((c) => c.type === "maintenance_mode/update_config" && "banner_mode" in c).pop();
     ok(cfg && cfg.banner_mode === "card" && cfg.banner_scroll === false, "enregistrement : banner_mode=card, banner_scroll=false");
   });
@@ -115,7 +115,7 @@ const tabs = (sr) => [...sr.querySelectorAll(".tab")].map((t) => t.dataset.tab).
     const rows = [...sr.querySelectorAll("table tr")].filter((r) => /reconnu|décalée|masquée/.test(r.textContent)).map((r) => r.textContent.replace(/\s+/g, " ").trim());
     ok(rows.some((r) => r.includes("Menu latéral reconnu") && r.endsWith("non")) && rows.some((r) => r.includes("Page décalée") && r.endsWith("oui")), "diagnostic : oui / non rendus correctement", rows.join(" | "));
     const box = sr.querySelector("input[data-action=toggle-compat]"); box.checked = true; box.dispatchEvent(new w.Event("change", { bubbles: true })); await sleep(10);
-    sr.querySelector("[data-action=save-settings]").click(); await sleep(20);
+    sr.querySelector("[data-action=save-block][data-block=compat]").click(); await sleep(20);
     const cfg = calls.filter((c) => c.type === "maintenance_mode/update_config" && "compat_mode" in c).pop();
     ok(cfg && cfg.compat_mode === true, "enregistrement : compat_mode=true");
   });

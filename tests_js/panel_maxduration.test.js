@@ -49,7 +49,7 @@ const now = Date.now();
   sr.querySelector("[data-tab=settings]").click(); await sleep(30);
   const d = sr.querySelector("[data-field='draft.maxdur']"); ok(d && d.value === "120", "paramètres : durée maximale par défaut affichée");
   d.value = "60"; d.dispatchEvent(new w.Event("input", { bubbles: true }));
-  sr.querySelector("[data-action=save-settings]").click(); await sleep(30);
+  sr.querySelector("[data-action=save-block][data-block=page]").click(); await sleep(30);
   ok(last("update_config").max_duration_minutes === 60, "paramètres : max_duration_minutes enregistré");
   console.log(fail ? `\n${fail} ÉCHEC(S)` : "\nTOUT PASSE"); process.exit(fail ? 1 : 0);
 })();

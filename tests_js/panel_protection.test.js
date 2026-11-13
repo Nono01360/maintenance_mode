@@ -31,7 +31,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(sr.textContent.includes("2 automatisation(s) sélectionnée(s) mais protégée(s)"), "étiquette protégée : ses automatisations sélectionnées sont signalées");
   const chips = [...sr.querySelectorAll(".chip")].filter((c) => c.textContent.trim() === "protégée").length;
   ok(chips === 2, "badge « protégée » sur chaque automatisation concernée dans la liste de sélection", chips);
-  sr.querySelector("[data-action=save-settings]").click(); await sleep(30);
+  sr.querySelector("[data-action=save-block][data-block=protect]").click(); await sleep(30);
   const cfg = calls.filter((c) => c.type === "maintenance_mode/update_config" && "excluded_labels" in c).pop();
   ok(cfg && cfg.excluded_labels.join() === "lab1" && cfg.excluded_automations.join() === "automation.a2", "enregistrement : excluded_labels et excluded_automations");
   console.log(fail ? `\n${fail} ÉCHEC(S)` : "\nTOUT PASSE"); process.exit(fail ? 1 : 0);

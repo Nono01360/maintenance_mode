@@ -98,7 +98,7 @@ const T = {
     no_notify: "Aucun service de notification trouvé.", k_pre: "Avant le début", k_started: "Au début",
     k_end_soon: "Avant la fin", k_ended: "À la fin", end_soon_min: "Rappel avant la fin (minutes)",
     s_templates: "Modèles", no_templates: "Aucun modèle. Enregistre-en un depuis le formulaire d'une maintenance.",
-    save_changes: "Enregistrer", reset_changes: "Annuler les modifications",
+    save_changes: "Enregistrer", reset_changes: "Annuler les modifications", unsaved: "Modifications non enregistrées",
     a_title: "Qui voit quelle vue du panneau",
     a_hint: "« Par défaut » : les administrateurs ont la vue administrateur, les autres la vue utilisateur. Le propriétaire a toujours la vue administrateur. Une vue administrateur permet de tout configurer, y compris pour un utilisateur non administrateur de Home Assistant. « Aucun accès » masque aussi le panneau dans le menu.",
     role_none: "Aucun accès", role_viewer: "Vue utilisateur", role_admin: "Vue administrateur",
@@ -209,7 +209,7 @@ const T = {
     no_notify: "No notification service found.", k_pre: "Before start", k_started: "At start",
     k_end_soon: "Before end", k_ended: "At end", end_soon_min: "Reminder before end (minutes)",
     s_templates: "Templates", no_templates: "No template. Save one from a maintenance form.",
-    save_changes: "Save", reset_changes: "Discard changes",
+    save_changes: "Save", reset_changes: "Discard changes", unsaved: "Unsaved changes",
     a_title: "Who sees which view of the panel",
     a_hint: "\"Default\": administrators get the administrator view, others the user view. The owner always has the administrator view. The administrator view can configure everything, even for a non-administrator Home Assistant user. \"No access\" also hides the panel from the menu.",
     role_none: "No access", role_viewer: "User view", role_admin: "Administrator view",
@@ -291,6 +291,18 @@ const EXTRA_PAGES = {
 };
 
 const NOTIFY_KINDS = ["pre", "started", "end_soon", "ended"];
+// Cartes de l'onglet Paramètres : chacune s'enregistre séparément (et ne touche qu'à ses propres réglages)
+const SETTINGS_BLOCKS = {
+  page: ["message", "max_duration_minutes", "confirm_threshold", "warn_minutes"],
+  autos: ["automations"],
+  protect: ["excluded_automations", "excluded_labels"],
+  blackout: ["blackouts"],
+  select: ["selected_labels", "selected_areas"],
+  users: ["allowed_users"],
+  notify: ["notify_services", "notify_kinds", "end_soon_minutes"],
+  banner: ["banner_mode", "banner_scroll"],
+  compat: ["compat_mode"],
+};
 const PERMS_ALL = ["view", "history", "history_delete", "control", "schedule", "templates", "settings", "access"];
 
 const STYLES = `
@@ -375,7 +387,7 @@ class MaintenanceModePanel extends HTMLElement {
     this._tab = "list";
     this._form = null;
     this._draft = null;
-    this._draftDirty = false;
+    this._base = null;
     this._autoFilter = "";
     this._confirm = null;
     this._error = "";
@@ -452,29 +464,91 @@ class MaintenanceModePanel extends HTMLElement {
     if (d.config?.roles && (!this._rolesDraft || !this._rolesDirty)) {
       this._rolesDraft = d.config.roles.map((r) => ({ id: r.id, name: r.name, permissions: [...r.permissions] }));
     }
-    if (d.config?.automations && (!this._draft || !this._draftDirty)) {
-      this._draft = {
-        banner_mode: d.config.banner_mode || "bar",
-        banner_scroll: d.config.banner_scroll !== false,
-        compat_mode: d.config.compat_mode === true,
-        max_duration_minutes: Number(d.config.max_duration_minutes) || 0,
-        confirm_threshold: Number(d.config.confirm_threshold ?? 20),
-        blackouts: (d.config.blackouts || []).map((b) => ({ id: b.id, name: b.name, days: [...b.days], start: b.start, end: b.end })),
-        excluded_automations: [...(d.config.excluded_automations || [])],
-        excluded_labels: [...(d.config.excluded_labels || [])],
-        selected_labels: [...(d.config.selected_labels || [])],
-        selected_areas: [...(d.config.selected_areas || [])],
-        automations: [...d.config.automations],
-        allowed_users: [...d.config.allowed_users],
-        warn_minutes: d.config.warn_minutes,
-        end_soon_minutes: d.config.end_soon_minutes,
-        message: d.config.message,
-        notify_services: [...d.config.notify_services],
-        notify_kinds: [...d.config.notify_kinds],
-      };
+    if (d.config?.automations) {
+      // Un bloc modifié par l'utilisateur garde ses modifications ; les autres suivent le serveur
+      const dirty = this._draft ? Object.keys(SETTINGS_BLOCKS).filter((b) => this._blockDirty(b)) : [];
+      this._base = this._settingsFresh(d.config);
+      const fresh = this._settingsFresh(d.config);
+      if (!this._draft) this._draft = fresh;
+      else {
+        for (const [b, keys] of Object.entries(SETTINGS_BLOCKS)) {
+          if (!dirty.includes(b)) for (const k of keys) this._draft[k] = fresh[k];
+        }
+      }
     }
     if (!this._tabAllowed(this._tab)) this._tab = "list";
     this._render();
+  }
+
+  // Valeurs des réglages telles que le serveur les connaît (copies : le brouillon et la référence sont indépendants)
+  _settingsFresh(c) {
+    return {
+      banner_mode: c.banner_mode || "bar",
+      banner_scroll: c.banner_scroll !== false,
+      compat_mode: c.compat_mode === true,
+      max_duration_minutes: Number(c.max_duration_minutes) || 0,
+      confirm_threshold: Number(c.confirm_threshold ?? 20),
+      blackouts: (c.blackouts || []).map((b) => ({ id: b.id, name: b.name, days: [...b.days], start: b.start, end: b.end })),
+      excluded_automations: [...(c.excluded_automations || [])],
+      excluded_labels: [...(c.excluded_labels || [])],
+      selected_labels: [...(c.selected_labels || [])],
+      selected_areas: [...(c.selected_areas || [])],
+      automations: [...c.automations],
+      allowed_users: [...c.allowed_users],
+      warn_minutes: c.warn_minutes,
+      end_soon_minutes: c.end_soon_minutes,
+      message: c.message,
+      notify_services: [...c.notify_services],
+      notify_kinds: [...c.notify_kinds],
+    };
+  }
+
+  // Ce que l'on envoie au serveur (valeurs numériques sûres)
+  _settingsPayload() {
+    const d = this._draft;
+    return {
+      automations: d.automations,
+      allowed_users: d.allowed_users,
+      warn_minutes: Number(d.warn_minutes) || 15,
+      end_soon_minutes: Number(d.end_soon_minutes) || 10,
+      message: d.message,
+      notify_services: d.notify_services,
+      notify_kinds: d.notify_kinds,
+      banner_mode: d.banner_mode,
+      banner_scroll: d.banner_scroll,
+      compat_mode: d.compat_mode,
+      max_duration_minutes: Number(d.max_duration_minutes) || 0,
+      confirm_threshold: Number(d.confirm_threshold) || 0,
+      blackouts: d.blackouts.map((b) => ({ ...(b.id ? { id: b.id } : {}), name: b.name.trim(), days: b.days, start: b.start, end: b.end })),
+      excluded_automations: d.excluded_automations,
+      excluded_labels: d.excluded_labels,
+      selected_labels: d.selected_labels,
+      selected_areas: d.selected_areas,
+    };
+  }
+
+  // Un bloc est « modifié » s'il diffère du serveur ; l'ordre des listes de cases à cocher ne compte pas
+  _blockDirty(block) {
+    if (!this._draft || !this._base) return false;
+    const canon = (v) => (Array.isArray(v) && v.every((x) => typeof x !== "object") ? [...v].sort() : v);
+    return SETTINGS_BLOCKS[block].some((k) => JSON.stringify(canon(this._draft[k])) !== JSON.stringify(canon(this._base[k])));
+  }
+
+  _blockActions(block) {
+    const off = this._blockDirty(block) ? "" : "disabled";
+    return `<div class="actions" style="margin-top:4px">
+      <button class="btn primary sm" data-action="save-block" data-block="${block}" ${off}>${this._t("save_changes")}</button>
+      <button class="btn sm" data-action="reset-block" data-block="${block}" ${off}>${this._t("reset_changes")}</button>
+      <span class="muted" data-block-flag="${block}" ${off ? "hidden" : ""}>${this._t("unsaved")}</span></div>`;
+  }
+
+  // Met à jour les boutons de chaque carte sans refaire le rendu (le champ en cours de saisie garde le focus)
+  _syncBlockButtons() {
+    for (const block of Object.keys(SETTINGS_BLOCKS)) {
+      const dirty = this._blockDirty(block);
+      this.shadowRoot.querySelectorAll(`[data-block="${block}"]`).forEach((b) => { b.disabled = !dirty; });
+      this.shadowRoot.querySelectorAll(`[data-block-flag="${block}"]`).forEach((n) => { n.hidden = !dirty; });
+    }
   }
 
   // Suppression annulable quelques secondes (le serveur garde l'élément en mémoire)
@@ -852,7 +926,7 @@ class MaintenanceModePanel extends HTMLElement {
           <input type="number" min="0" max="10000" data-field="draft.confirm" value="${esc(dr.confirm_threshold)}"></label>
         <label class="field">${this._t("s_warn")}
           <input type="number" min="1" max="1440" data-field="draft.warn" value="${esc(dr.warn_minutes)}"></label>
-      </div></ha-card>
+      ${this._blockActions("page")}</div></ha-card>
 
       <ha-card class="card"><div class="col">
         <div><h2>${this._t("s_autos")}</h2>
@@ -867,7 +941,7 @@ class MaintenanceModePanel extends HTMLElement {
         </div>
         ${conflict ? `<div class="banner error">${this._t("protect_conflict", { n: conflict })}</div>` : ""}
         ${dr.automations.length ? `<div><button class="btn sm" data-action="auto-none">${this._t("deselect_all")}</button></div>` : ""}
-      </div></ha-card>
+      ${this._blockActions("autos")}</div></ha-card>
 
       <ha-card class="card"><div class="col">
         <div><h2>${this._t("s_protect")}</h2><div class="muted">${this._t("protect_hint")}</div></div>
@@ -884,7 +958,7 @@ class MaintenanceModePanel extends HTMLElement {
             <input type="checkbox" data-action="toggle-excl-auto" data-id="${esc(a.id)}" ${dr.excluded_automations.includes(a.id) ? "checked" : ""}>
             <span class="grow">${esc(a.name)} <span class="muted">${esc(a.id)}</span></span></label>`).join("")}
         </div>
-      </div></ha-card>
+      ${this._blockActions("protect")}</div></ha-card>
 
       <ha-card class="card"><div class="col">
         <div><h2>${this._t("s_blackout")}</h2><div class="muted">${this._t("bo_hint")}</div></div>
@@ -899,7 +973,7 @@ class MaintenanceModePanel extends HTMLElement {
             <input type="time" data-field="bo.end" data-idx="${i}" value="${esc(b.end)}"></div>
         </div>`).join("") : `<div class="muted">${this._t("bo_none")}</div>`}
         <div><button class="btn sm" data-action="add-blackout">${this._t("bo_add")}</button></div>
-      </div></ha-card>
+      ${this._blockActions("blackout")}</div></ha-card>
 
       <ha-card class="card"><div class="col">
         <div><h2>${this._t("s_select")}</h2><div class="muted">${this._t("select_hint")}</div></div>
@@ -917,7 +991,7 @@ class MaintenanceModePanel extends HTMLElement {
             <span class="grow">${esc(a.name)} <span class="muted">${a.automations.length}</span></span></label>`).join("")
             : `<div class="empty">${this._t("select_none")}</div>`}
         </div>
-      </div></ha-card>
+      ${this._blockActions("select")}</div></ha-card>
 
       <ha-card class="card"><div class="col">
         <div><h2>${this._t("s_users")}</h2>
@@ -929,7 +1003,7 @@ class MaintenanceModePanel extends HTMLElement {
             : `<label class="check"><input type="checkbox" data-action="toggle-user" data-user="${esc(u.id)}" ${dr.allowed_users.includes(u.id) ? "checked" : ""}>
                 <span class="grow">${esc(u.name)}${u.is_admin ? `<span class="muted">${this._t("admin_badge")}</span>` : ""}</span></label>`).join("")}
         </div>
-      </div></ha-card>
+      ${this._blockActions("users")}</div></ha-card>
 
       <ha-card class="card"><div class="col">
         <div><h2>${this._t("s_notify")}</h2><div class="muted">${this._t("s_notify_hint")}</div></div>
@@ -944,7 +1018,7 @@ class MaintenanceModePanel extends HTMLElement {
         </div>
         <label class="field">${this._t("end_soon_min")}
           <input type="number" min="1" max="1440" data-field="draft.endsoon" value="${esc(dr.end_soon_minutes)}"></label>
-      </div></ha-card>
+      ${this._blockActions("notify")}</div></ha-card>
 
       <ha-card class="card"><div class="col">
         <div><h2>${this._t("s_banner")}</h2><div class="muted">${this._t("banner_hint")}</div></div>
@@ -955,19 +1029,14 @@ class MaintenanceModePanel extends HTMLElement {
           </select></label>
         <label class="check"><input type="checkbox" data-action="toggle-banner-scroll" ${dr.banner_scroll ? "checked" : ""}>
           <span>${this._t("banner_scroll")}</span></label>
-      </div></ha-card>
+      ${this._blockActions("banner")}</div></ha-card>
 
       <ha-card class="card"><div class="col">
         <div><h2>${this._t("s_compat")}</h2><div class="muted">${this._t("compat_hint")}</div></div>
         <label class="check"><input type="checkbox" data-action="toggle-compat" ${dr.compat_mode ? "checked" : ""}>
           <span>${this._t("compat_mode")}</span></label>
         ${this._diagHtml()}
-      </div></ha-card>
-
-      <div class="actions" style="margin-top:0">
-        <button class="btn primary" data-action="save-settings" ${this._draftDirty ? "" : "disabled"}>${this._t("save_changes")}</button>
-        <button class="btn" data-action="reset-settings" ${this._draftDirty ? "" : "disabled"}>${this._t("reset_changes")}</button>
-      </div>`;
+      ${this._blockActions("compat")}</div></ha-card>`;
   }
 
   // Automatisations protégées d'après le brouillon : choisies une à une + celles portant une étiquette protégée
@@ -1139,12 +1208,7 @@ class MaintenanceModePanel extends HTMLElement {
       .forEach((b) => { b.disabled = false; });
   }
 
-  _markDirty() {
-    if (this._draftDirty) return;
-    this._draftDirty = true;
-    this.shadowRoot.querySelectorAll('[data-action="save-settings"], [data-action="reset-settings"]')
-      .forEach((b) => { b.disabled = false; });
-  }
+  _markDirty() { this._syncBlockButtons(); }
 
   _toggle(list, value) {
     const i = list.indexOf(value);
@@ -1331,34 +1395,22 @@ async _act(action, target) {
     } else if (action === "toggle-kind") {
       this._toggle(this._draft.notify_kinds, target.dataset.kind);
       this._markDirty();
-    } else if (action === "save-settings") {
-      // CORRECTION : Attendre la réponse, puis forcer le rafraîchissement des données
-      const ok = await this._call("update_config", {
-        automations: this._draft.automations,
-        allowed_users: this._draft.allowed_users,
-        warn_minutes: Number(this._draft.warn_minutes) || 15,
-        end_soon_minutes: Number(this._draft.end_soon_minutes) || 10,
-        message: this._draft.message,
-        notify_services: this._draft.notify_services,
-        notify_kinds: this._draft.notify_kinds,
-        banner_mode: this._draft.banner_mode,
-        banner_scroll: this._draft.banner_scroll,
-        compat_mode: this._draft.compat_mode,
-        max_duration_minutes: Number(this._draft.max_duration_minutes) || 0,
-        confirm_threshold: Number(this._draft.confirm_threshold) || 0,
-        blackouts: this._draft.blackouts.map((b) => ({ ...(b.id ? { id: b.id } : {}), name: b.name.trim(), days: b.days, start: b.start, end: b.end })),
-        excluded_automations: this._draft.excluded_automations,
-        excluded_labels: this._draft.excluded_labels,
-        selected_labels: this._draft.selected_labels,
-        selected_areas: this._draft.selected_areas,
-      });
-      if (ok) {
-        this._draftDirty = false;
-        if (this._data?.config) this._onData(this._data);
+    } else if (action === "save-block") {
+      const keys = SETTINGS_BLOCKS[target.dataset.block];
+      if (!keys) return;
+      const all = this._settingsPayload();
+      const payload = Object.fromEntries(keys.map((k) => [k, all[k]]));
+      if (await this._call("update_config", payload) && this._data?.config) {
+        // le brouillon du bloc reprend ce que le serveur a réellement enregistré (valeurs normalisées)
+        const fresh = this._settingsFresh(this._data.config);
+        for (const k of keys) this._draft[k] = fresh[k];
+        this._render(true);
       }
-    } else if (action === "reset-settings") {
-      this._draftDirty = false;
-      this._onData(this._data);
+    } else if (action === "reset-block") {
+      const keys = SETTINGS_BLOCKS[target.dataset.block];
+      if (!keys || !this._data?.config) return;
+      const fresh = this._settingsFresh(this._data.config);
+      for (const k of keys) this._draft[k] = fresh[k];
       this._render(true);
     } else if (action === "delete-template") {
       const id = target.dataset.id;

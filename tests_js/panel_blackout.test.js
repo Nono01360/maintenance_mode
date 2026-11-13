@@ -34,7 +34,7 @@ async function run(owner, fn) {
     const en = sr.querySelectorAll("[data-field='bo.end']")[1]; en.value = "08:30"; en.dispatchEvent(new w.Event("input", { bubbles: true }));
     sr.querySelector("input[data-action=toggle-bo-day][data-idx='1'][data-day='2']").click(); await sleep(10);
     sr.querySelector("[data-action=delete-blackout][data-idx='0']").click(); await sleep(20);
-    sr.querySelector("[data-action=save-settings]").click(); await sleep(30);
+    sr.querySelector("[data-action=save-block][data-block=blackout]").click(); await sleep(30);
     const cfg = last("update_config");
     ok(cfg.blackouts.length === 1 && cfg.blackouts[0].name === "Matin" && cfg.blackouts[0].start === "07:00" && cfg.blackouts[0].end === "08:30" && cfg.blackouts[0].days.join() === "2" && !("id" in cfg.blackouts[0]), "enregistrement : plage créée (sans id), ancienne supprimée");
     sr.querySelector("[data-tab=list]").click(); await sleep(10);

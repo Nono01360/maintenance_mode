@@ -15,6 +15,10 @@ Les mises à jour apparaissent ensuite dans HACS à chaque nouvelle *release* du
 
 ## Le panneau
 
+> **Paramètres** : chaque carte a ses propres boutons **Enregistrer** et **Annuler les modifications**, activés dès que
+> la carte est modifiée (avec la mention « Modifications non enregistrées »). Enregistrer une carte n'envoie que ses réglages
+> et ne touche pas aux modifications en cours dans les autres.
+
 | Onglet | Visible avec l'autorisation | Contenu |
 |---|---|---|
 | **Maintenances** | `view` | état en cours et planning ; selon les autorisations : démarrer / terminer, planifier / modifier / supprimer, historique |
