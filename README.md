@@ -112,7 +112,13 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
   page** (l'interface Home Assistant est repoussée vers le bas) ou une petite carte. Si le texte dépasse la fenêtre, il
   **défile** (désactivable : il passe alors à la ligne, avec un ascenseur s'il est très long). Le même bandeau sert
   aussi au préavis d'une maintenance à venir.
-- **Réparations** : alerte si une automatisation sélectionnée n'existe plus.
+- **Réparations** (avec bouton **Réparer**) : trois écarts sont surveillés, à chaque enregistrement, au démarrage et
+  après un rechargement des automatisations.
+  - *Automatisation sélectionnée introuvable* : « Réparer » la retire de la sélection.
+  - *Automatisation suspendue disparue pendant la maintenance* : « Réparer » l'oublie (la fin de la maintenance n'essaie
+    plus de la réactiver).
+  - *Remise en pause impossible* (échec du service après un redémarrage ou un rechargement) : « Réparer » réessaie.
+  Réparer sans rien à corriger est sans effet. L'alerte disparaît d'elle-même quand l'écart n'existe plus.
 - **Bascule transactionnelle** : démarrer ou terminer une maintenance suspend ou réactive des automatisations, puis
   enregistre l'état. Pour qu'un arrêt brutal entre les deux ne laisse jamais des automatisations coupées sans trace,
   un marqueur « bascule en cours » est écrit **avant** d'y toucher et effacé par l'enregistrement final. Au démarrage

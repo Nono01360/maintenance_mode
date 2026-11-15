@@ -22,6 +22,7 @@ from .const import (
     PANEL_JS,
     PANEL_URL_PATH,
     PLATFORMS,
+    RECONCILE_ISSUES,
     STATIC_BASE,
     VERSION,
 )
@@ -114,5 +115,5 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await store.async_remove()
     for suffix in ("backup_v1", "unreadable"):          # copies de sécurité de la migration / du mode sûr
         await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.{suffix}").async_remove()
-    for issue in ("missing_automations", "storage_unreadable"):
+    for issue in (*RECONCILE_ISSUES, "storage_unreadable"):
         ir.async_delete_issue(hass, DOMAIN, issue)

@@ -10,7 +10,6 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
@@ -23,6 +22,7 @@ from .planning import PlanningMixin
 from .blackout import BlackoutMixin
 from .trash import TrashMixin
 from .validation import ValidationMixin
+from .reconcile import ReconcileMixin
 from .suspension import SuspensionMixin
 from .transaction import TransactionMixin
 from .notifications import NotificationsMixin
@@ -55,7 +55,7 @@ def get_manager(hass: HomeAssistant) -> MaintenanceManager | None:
     return None
 
 
-class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, TransactionMixin, ValidationMixin, BlackoutMixin, TrashMixin, PlanningMixin, StorageMixin, SettingsMixin, ProtectionMixin):
+class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, TransactionMixin, ReconcileMixin, ValidationMixin, BlackoutMixin, TrashMixin, PlanningMixin, StorageMixin, SettingsMixin, ProtectionMixin):
     """Source de vérité unique ; entités, panneau, services et calendrier la reflètent."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -67,6 +67,7 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Trans
         self.history: list[dict[str, Any]] = []
         self.notified: list[str] = []
         self.pending: dict[str, Any] | None = None   # bascule en cours (voir transaction.py)
+        self._reapply_failed: list[str] = []         # remises en pause en échec (voir reconcile.py)
         self.config: dict[str, Any] = default_config()
         self.users: list[dict[str, Any]] = []
         self.owner_ids: list[str] = []
@@ -88,7 +89,7 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Trans
         if self._unsub_reload:
             self._unsub_reload()
             self._unsub_reload = None
-        ir.async_delete_issue(self.hass, DOMAIN, "missing_automations")
+        self._clear_issues()
 
     @callback
     def async_add_listener(self, update: CALLBACK_TYPE) -> CALLBACK_TYPE:
@@ -253,22 +254,6 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Trans
             if u.is_active and not u.system_generated
         ]
         self.owner_ids = [u["id"] for u in self.users if u["is_owner"]]
-
-    @callback
-    def _update_issues(self) -> None:
-        """Alertes dans Paramètres → Réparations."""
-        if not self.hass.is_running:
-            return
-        missing = [e for e in self.config["automations"] if self.hass.states.get(e) is None]
-        if missing:
-            ir.async_create_issue(
-                self.hass, DOMAIN, "missing_automations",
-                is_fixable=False, severity=ir.IssueSeverity.WARNING,
-                translation_key="missing_automations",
-                translation_placeholders={"entities": ", ".join(missing)},
-            )
-        else:
-            ir.async_delete_issue(self.hass, DOMAIN, "missing_automations")
 
     async def _commit(self, *, now: bool = False) -> None:
         """Applique et enregistre l'état.

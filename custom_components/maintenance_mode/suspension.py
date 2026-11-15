@@ -69,13 +69,12 @@ class SuspensionMixin:
         modifiées. On ne touche qu'à l'instantané : une automatisation créée pendant la maintenance
         n'est pas suspendue, et si aucune maintenance ne suspend rien, on ne fait rien.
         """
-        if not self.current or not self.disabled:
-            return
         again = [
             e for e in self.disabled
-            if (state := self.hass.states.get(e)) and state.state == STATE_ON
+            if self.current and (state := self.hass.states.get(e)) and state.state == STATE_ON
         ]
         if not again:
+            self._reapply_failed = []
             return
         _LOGGER.info("Maintenance en cours : %d automatisation(s) remises en pause", len(again))
         try:
@@ -84,9 +83,14 @@ class SuspensionMixin:
             )
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Impossible de remettre les automatisations en pause")
+        # celles qui restent actives : écart signalé dans Réparations (bouton « Réparer » = réessayer)
+        self._reapply_failed = [
+            e for e in again if (state := self.hass.states.get(e)) and state.state == STATE_ON
+        ]
 
     async def _async_on_automation_reload(self, _event: Any) -> None:
         if self._unloaded or not self.current or not self.disabled:
             return
         async with self._lock:
             await self._reapply_suspension()
+            self._update_issues()

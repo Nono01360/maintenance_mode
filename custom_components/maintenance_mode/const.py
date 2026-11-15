@@ -69,6 +69,9 @@ DEFAULT_END_SOON_MINUTES = 10
 MAX_HISTORY = 50
 MAX_TEMPLATES = 20
 
+# Alertes « Réparations » de la réconciliation (9.2)
+RECONCILE_ISSUES = ("missing_automations", "missing_suspended", "reapply_failed")
+
 # Évènements déclenchés sur le bus (utilisables comme déclencheurs d'automatisation)
 EVENT_STARTED = f"{DOMAIN}_started"
 EVENT_ENDED = f"{DOMAIN}_ended"

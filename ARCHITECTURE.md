@@ -15,6 +15,8 @@ Vue d'ensemble de l'intégration **Mode maintenance** (0.7). Chaque module Pytho
 | `settings.py` | mise à jour des réglages (avec anti-escalade des droits), suppression d'historique |
 | `suspension.py` | suspension / réactivation / remise en pause des automatisations (instantané pris au démarrage) |
 | `transaction.py` | bascule transactionnelle : marqueur `pending` écrit avant d'agir, reprise d'une bascule interrompue au démarrage |
+| `reconcile.py` | réconciliation : écarts détectés (automatisation introuvable, suspendue disparue, remise en pause en échec), alertes réparables |
+| `repairs.py` | flux « Réparer » des alertes (Paramètres → Réparations) |
 | `planning.py` | échéances, rattrapage au démarrage, minuterie unique |
 | `notifications.py` | textes fr / en et envoi aux services `notify.*` choisis |
 | `storage.py` | stockage versionné (format 2), migration depuis les anciens formats, copie de sécurité, mode sûr |

@@ -3,12 +3,12 @@
   "name": "Mode maintenance",
   "codeowners": ["@Nono01360"],
   "config_flow": true,
-  "dependencies": ["http", "frontend", "panel_custom", "websocket_api", "automation"],
+  "dependencies": ["http", "frontend", "panel_custom", "websocket_api", "automation", "repairs"],
   "documentation": "https://github.com/Nono01360/maintenance_mode",
   "integration_type": "service",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/Nono01360/maintenance_mode/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.9.1"
+  "version": "0.9.2"
 }

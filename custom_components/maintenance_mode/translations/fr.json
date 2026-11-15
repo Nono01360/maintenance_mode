@@ -13,11 +13,52 @@
   "issues": {
     "missing_automations": {
       "title": "Automatisations introuvables dans le mode maintenance",
-      "description": "Ces automatisations sélectionnées n'existent plus : {entities}. Mets à jour la liste dans le panneau « Maintenance » (onglet Paramètres)."
+      "description": "Ces automatisations sélectionnées n'existent plus : {entities}. Utilise « Réparer » pour les retirer de la sélection, ou mets à jour la liste dans le panneau « Maintenance » (onglet Paramètres).",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Retirer de la sélection",
+            "description": "Ces automatisations n'existent plus : {entities}. Elles seront retirées de la sélection du mode maintenance."
+          }
+        },
+        "abort": {
+          "not_loaded": "L'intégration Mode maintenance n'est pas chargée : rien n'a été modifié."
+        }
+      }
     },
     "storage_unreadable": {
       "title": "Mode maintenance : données partiellement illisibles",
       "description": "Le fichier de données de Mode maintenance contenait des éléments illisibles ({problems}). L'intégration a démarré en mode sûr avec ce qui était lisible ; une copie de l'original est conservée dans le dossier .storage (fichier se terminant par .unreadable). Si une maintenance était en cours, vérifie tes automatisations."
+    },
+    "missing_suspended": {
+      "title": "Mode maintenance : automatisation suspendue disparue",
+      "description": "Ces automatisations suspendues par la maintenance en cours n'existent plus : {entities}. Utilise « Réparer » pour les oublier (elles ne seront pas réactivées à la fin).",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Oublier les automatisations disparues",
+            "description": "Ces automatisations n'existent plus : {entities}. La maintenance les oubliera : elle n'essaiera plus de les réactiver à la fin."
+          }
+        },
+        "abort": {
+          "not_loaded": "L'intégration Mode maintenance n'est pas chargée : rien n'a été modifié."
+        }
+      }
+    },
+    "reapply_failed": {
+      "title": "Mode maintenance : remise en pause impossible",
+      "description": "Ces automatisations devraient être suspendues mais sont actives : {entities}. Utilise « Réparer » pour réessayer de les suspendre.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Réessayer de suspendre",
+            "description": "Ces automatisations sont actives alors qu'une maintenance est en cours : {entities}. Home Assistant va réessayer de les suspendre."
+          }
+        },
+        "abort": {
+          "not_loaded": "L'intégration Mode maintenance n'est pas chargée : rien n'a été modifié."
+        }
+      }
     }
   },
   "selector": {
