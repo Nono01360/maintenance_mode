@@ -113,6 +113,13 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
   **défile** (désactivable : il passe alors à la ligne, avec un ascenseur s'il est très long). Le même bandeau sert
   aussi au préavis d'une maintenance à venir.
 - **Réparations** : alerte si une automatisation sélectionnée n'existe plus.
+- **Bascule transactionnelle** : démarrer ou terminer une maintenance suspend ou réactive des automatisations, puis
+  enregistre l'état. Pour qu'un arrêt brutal entre les deux ne laisse jamais des automatisations coupées sans trace,
+  un marqueur « bascule en cours » est écrit **avant** d'y toucher et effacé par l'enregistrement final. Au démarrage
+  suivant, une bascule interrompue est **rejouée jusqu'au bout** (chaque étape est idempotente). Après un arrêt à
+  n'importe quelle étape, l'état est cohérent : maintenance en cours avec exactement ses automatisations suspendues, ou
+  aucune maintenance et rien de suspendu par l'intégration. Une bascule rejouée peut émettre une seconde fois
+  l'évènement `maintenance_mode_started` / `maintenance_mode_ended` (les notifications, elles, sont dédoublonnées).
 - **Suspension réappliquée** : si Home Assistant redémarre (mise à jour, arrêt brutal) ou si tu recharges les
   automatisations pendant une maintenance, celles qui avaient été suspendues et qui seraient redevenues actives (par
   exemple une automatisation avec `initial_state: true`) sont remises en pause. On ne réapplique que la liste

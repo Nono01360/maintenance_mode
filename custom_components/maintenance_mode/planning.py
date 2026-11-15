@@ -33,6 +33,7 @@ class PlanningMixin:
         if self._unloaded:
             return
         async with self._lock:
+            await self._async_recover()        # une bascule interrompue par un arrêt brutal est terminée d'abord
             await self._process_due()
             await self._reapply_suspension()   # HA vient de (re)démarrer
             await self._commit(now=True)

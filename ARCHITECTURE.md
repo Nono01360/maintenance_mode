@@ -14,6 +14,7 @@ Vue d'ensemble de l'intégration **Mode maintenance** (0.7). Chaque module Pytho
 | `access.py` | rôles, autorisations, droits d'affichage d'un utilisateur, vue d'état filtrée pour le panneau |
 | `settings.py` | mise à jour des réglages (avec anti-escalade des droits), suppression d'historique |
 | `suspension.py` | suspension / réactivation / remise en pause des automatisations (instantané pris au démarrage) |
+| `transaction.py` | bascule transactionnelle : marqueur `pending` écrit avant d'agir, reprise d'une bascule interrompue au démarrage |
 | `planning.py` | échéances, rattrapage au démarrage, minuterie unique |
 | `notifications.py` | textes fr / en et envoi aux services `notify.*` choisis |
 | `storage.py` | stockage versionné (format 2), migration depuis les anciens formats, copie de sécurité, mode sûr |
@@ -47,6 +48,8 @@ bandeau (overlay.js) ◀── attributs de l'entité ◀───────�
 
 Fichier `.storage/maintenance_mode.<entry_id>`, **format 2**.
 
+- Clé `pending` (0.9.1, additive, le format reste 2) : marqueur de bascule en cours ; vide hors bascule. Une version plus
+  ancienne l'ignore.
 - Migration 1 → 2 (`migrate_data`) : conversion des anciens formats (0.2 : `active`, `start_armed`), identifiants
   d'historique. L'ancien fichier est d'abord copié dans `….backup_v1`.
 - Intégrité (`check_data`) : une partie illisible est écartée, le reste est conservé (**mode sûr**) ; l'original est

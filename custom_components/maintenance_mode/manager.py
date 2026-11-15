@@ -24,6 +24,7 @@ from .blackout import BlackoutMixin
 from .trash import TrashMixin
 from .validation import ValidationMixin
 from .suspension import SuspensionMixin
+from .transaction import TransactionMixin
 from .notifications import NotificationsMixin
 from .window import (
     Window,
@@ -54,7 +55,7 @@ def get_manager(hass: HomeAssistant) -> MaintenanceManager | None:
     return None
 
 
-class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, ValidationMixin, BlackoutMixin, TrashMixin, PlanningMixin, StorageMixin, SettingsMixin, ProtectionMixin):
+class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, TransactionMixin, ValidationMixin, BlackoutMixin, TrashMixin, PlanningMixin, StorageMixin, SettingsMixin, ProtectionMixin):
     """Source de vérité unique ; entités, panneau, services et calendrier la reflètent."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -65,6 +66,7 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Valid
         self.schedule: list[Window] = []
         self.history: list[dict[str, Any]] = []
         self.notified: list[str] = []
+        self.pending: dict[str, Any] | None = None   # bascule en cours (voir transaction.py)
         self.config: dict[str, Any] = default_config()
         self.users: list[dict[str, Any]] = []
         self.owner_ids: list[str] = []

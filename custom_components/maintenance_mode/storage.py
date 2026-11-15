@@ -104,6 +104,10 @@ def check_data(raw: Any) -> tuple[dict[str, Any], list[str]]:
     if isinstance(data.get("history"), list) and not all(isinstance(x, dict) for x in data["history"]):
         data["history"] = [x for x in data["history"] if isinstance(x, dict)]
         problems.append("history")
+    if data.get("pending") is not None and not (
+        isinstance(data["pending"], dict) and data["pending"].get("op") in ("activate", "deactivate")
+    ):
+        bad("pending")
     if isinstance(data.get("schedule"), list):
         good = [x for x in data["schedule"] if isinstance(x, dict) and Window.from_dict(x)]
         if len(good) != len(data["schedule"]):
@@ -176,6 +180,7 @@ class StorageMixin:
         for item in self.history:
             item.setdefault("hid", uuid.uuid4().hex[:8])   # filet de sécurité : toute entrée a un identifiant
         self.notified = list(data.get("notified", []))[-200:]
+        self.pending = data.get("pending")
 
         self.current = Window.from_dict(data["current"]) if data.get("current") else None
         self.schedule = [w for d in data.get("schedule", []) if (w := Window.from_dict(d))]
@@ -212,6 +217,7 @@ class StorageMixin:
             "schedule": [w.as_dict() for w in self.schedule],
             "history": self.history,
             "notified": self.notified,
+            "pending": self.pending,
         }
 
     async def async_flush(self) -> None:

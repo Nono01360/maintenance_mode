@@ -18,10 +18,13 @@ class SuspensionMixin:
     """Démarre / termine une maintenance. Suppose `hass`, `config`, `current`, `disabled`, `history`, `_lock`
     et `_notify` du gestionnaire."""
 
-    async def _activate(self, window: Window) -> None:
+    async def _activate(self, window: Window, targets: list[str] | None = None) -> None:
+        """`targets` n'est donné que pour rejouer une bascule interrompue (liste déjà décidée avant l'arrêt)."""
         self._apply_max_duration(window)
-        targets = self.plan_suspension()["suspend"] if window.pause_automations else []
+        if targets is None:
+            targets = self.plan_suspension()["suspend"] if window.pause_automations else []
         if targets:
+            await self._begin("activate", window=window.as_dict(), targets=targets)
             try:
                 await self.hass.services.async_call(
                     "automation", "turn_off",
@@ -33,10 +36,12 @@ class SuspensionMixin:
         self.current = window
         self.hass.bus.async_fire(EVENT_STARTED, window.as_dict())
         await self._notify("started", window)
+        self.pending = None      # effacé par l'enregistrement qui suit
 
     async def _deactivate(self, ended_by: str = "manual") -> None:
         window = self.current
         if self.disabled:
+            await self._begin("deactivate", ended_by=ended_by)
             try:
                 await self.hass.services.async_call(
                     "automation", "turn_on", {"entity_id": self.disabled}, blocking=True
@@ -54,6 +59,7 @@ class SuspensionMixin:
             self.hass.bus.async_fire(EVENT_ENDED, {**window.as_dict(), "ended_by": ended_by})
             if ended_by != "replaced":
                 await self._notify("ended", window)
+        self.pending = None      # effacé par l'enregistrement qui suit
 
     async def _reapply_suspension(self) -> None:
         """Remet en pause les automatisations de l'instantané redevenues actives.
