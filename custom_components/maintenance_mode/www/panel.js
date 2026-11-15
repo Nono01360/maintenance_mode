@@ -51,6 +51,7 @@ const T = {
     no_access: "Tu n'as pas accès à ce panneau.", no_access_hint: "Demande à un administrateur de modifier tes droits.",
     running: "Maintenance en cours", since: "Depuis {start}", end_planned: "Fin prévue {end} ({rel})",
     no_end: "Pas d'heure de fin définie", paused_n: "{n} automatisation(s) suspendue(s)",
+    progress_suspend: "Suspension des automatisations : {done} / {total}", progress_resume: "Réactivation des automatisations : {done} / {total}",
     edit: "Modifier", stop_now: "Terminer maintenant", confirm_stop: "Confirmer l'arrêt ?",
     none_running: "Aucune maintenance en cours", next: "Prochaine : {start} ({rel})", none_planned: "Aucune maintenance planifiée.",
     start_btn: "Démarrer une maintenance", planned_title: "Maintenances planifiées", plan_btn: "Planifier",
@@ -162,6 +163,7 @@ const T = {
     no_access: "You do not have access to this panel.", no_access_hint: "Ask an administrator to change your rights.",
     running: "Maintenance in progress", since: "Since {start}", end_planned: "Expected end {end} ({rel})",
     no_end: "No end time set", paused_n: "{n} automation(s) paused",
+    progress_suspend: "Pausing automations: {done} / {total}", progress_resume: "Re-enabling automations: {done} / {total}",
     edit: "Edit", stop_now: "End now", confirm_stop: "Confirm stop?",
     none_running: "No maintenance in progress", next: "Next: {start} ({rel})", none_planned: "No maintenance scheduled.",
     start_btn: "Start a maintenance", planned_title: "Scheduled maintenance", plan_btn: "Schedule",
@@ -336,6 +338,7 @@ const STYLES = `
   .muted { color: var(--secondary-text-color); font-size: 13px; }
   .badge { width: 48px; height: 48px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
     background: color-mix(in srgb, var(--primary-color) 15%, transparent); color: var(--primary-color); }
+  progress { width: 100%; accent-color: var(--primary-color); }
   .badge.warn { background: color-mix(in srgb, var(--warning-color, #ff9800) 20%, transparent); color: var(--warning-color, #ff9800); }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 12px; font-size: 12px;
@@ -739,6 +742,14 @@ class MaintenanceModePanel extends HTMLElement {
     const canSchedule = this._can("schedule");
     const cur = d.current;
     let html = "";
+    if (d.progress) {      // suspension / réactivation par lots en cours (visible pour ceux qui peuvent démarrer ou régler)
+      const p = d.progress;
+      const label = this._t(p.phase === "resume" ? "progress_resume" : "progress_suspend", { done: p.done, total: p.total });
+      html += `<ha-card class="card" data-role="progress"><div class="row">
+        <div class="badge warn"><ha-icon icon="mdi:timer-sand"></ha-icon></div>
+        <div class="grow"><h2>${label}</h2>
+          <progress max="${esc(p.total)}" value="${esc(p.done)}" aria-label="${esc(label)}"></progress></div></div></ha-card>`;
+    }
 
     if (cur) {
       const end = cur.end

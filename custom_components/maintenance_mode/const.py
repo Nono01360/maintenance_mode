@@ -69,6 +69,11 @@ DEFAULT_END_SOON_MINUTES = 10
 MAX_HISTORY = 50
 MAX_TEMPLATES = 20
 
+# Suspension par lots (9.3) : taille d'un lot, délai d'attente d'un lot (secondes), pause entre deux lots (secondes)
+BATCH_SIZE = 20
+BATCH_TIMEOUT = 30.0
+BATCH_PAUSE = 0
+
 # Alertes « Réparations » de la réconciliation (9.2)
 RECONCILE_ISSUES = ("missing_automations", "missing_suspended", "reapply_failed")
 

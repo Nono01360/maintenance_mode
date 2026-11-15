@@ -14,6 +14,7 @@ Vue d'ensemble de l'intégration **Mode maintenance** (0.7). Chaque module Pytho
 | `access.py` | rôles, autorisations, droits d'affichage d'un utilisateur, vue d'état filtrée pour le panneau |
 | `settings.py` | mise à jour des réglages (avec anti-escalade des droits), suppression d'historique |
 | `suspension.py` | suspension / réactivation / remise en pause des automatisations (instantané pris au démarrage) |
+| `batching.py` | suspension / réactivation par lots : délai d'attente par lot, reprise partielle, progression |
 | `transaction.py` | bascule transactionnelle : marqueur `pending` écrit avant d'agir, reprise d'une bascule interrompue au démarrage |
 | `reconcile.py` | réconciliation : écarts détectés (automatisation introuvable, suspendue disparue, remise en pause en échec), alertes réparables |
 | `repairs.py` | flux « Réparer » des alertes (Paramètres → Réparations) |

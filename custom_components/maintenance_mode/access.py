@@ -140,6 +140,8 @@ class AccessMixin:
             ]
         if perms & {"control", "settings"}:
             data["disabled_count"] = len(self.disabled)
+            if self.progress:
+                data["progress"] = dict(self.progress)
         if "history" in perms:
             data["history"] = list(reversed(self.history))[:20]
         return data

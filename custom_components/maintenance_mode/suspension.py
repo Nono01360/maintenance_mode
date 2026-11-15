@@ -23,16 +23,12 @@ class SuspensionMixin:
         self._apply_max_duration(window)
         if targets is None:
             targets = self.plan_suspension()["suspend"] if window.pause_automations else []
+        failed: list[str] = []
         if targets:
             await self._begin("activate", window=window.as_dict(), targets=targets)
-            try:
-                await self.hass.services.async_call(
-                    "automation", "turn_off",
-                    {"entity_id": targets, "stop_actions": True}, blocking=True,
-                )
-            except Exception:  # noqa: BLE001
-                _LOGGER.exception("Impossible de désactiver les automatisations")
+            failed = await self._call_batched("turn_off", targets, phase="suspend", stop_actions=True)
         self.disabled = targets
+        self._reapply_failed = failed      # lots en échec : alerte « Réparer » = réessayer (reconcile.py)
         self.current = window
         self.hass.bus.async_fire(EVENT_STARTED, window.as_dict())
         await self._notify("started", window)
@@ -42,13 +38,13 @@ class SuspensionMixin:
         window = self.current
         if self.disabled:
             await self._begin("deactivate", ended_by=ended_by)
-            try:
-                await self.hass.services.async_call(
-                    "automation", "turn_on", {"entity_id": self.disabled}, blocking=True
-                )
-            except Exception:  # noqa: BLE001
-                _LOGGER.exception("Impossible de réactiver les automatisations")
+            failed = await self._call_batched("turn_on", self.disabled, phase="resume")
+            if failed:       # les lots en échec sont réessayés une par une
+                failed = await self._call_batched("turn_on", failed, phase="resume", size=1)
+            if failed:
+                _LOGGER.error("Automatisations non réactivées : %s", ", ".join(failed))
         self.disabled = []
+        self._reapply_failed = []
         self.current = None
         if window:
             now = dt_util.utcnow()
@@ -77,12 +73,7 @@ class SuspensionMixin:
             self._reapply_failed = []
             return
         _LOGGER.info("Maintenance en cours : %d automatisation(s) remises en pause", len(again))
-        try:
-            await self.hass.services.async_call(
-                "automation", "turn_off", {"entity_id": again, "stop_actions": True}, blocking=True
-            )
-        except Exception:  # noqa: BLE001
-            _LOGGER.exception("Impossible de remettre les automatisations en pause")
+        await self._call_batched("turn_off", again, phase="suspend", stop_actions=True)
         # celles qui restent actives : écart signalé dans Réparations (bouton « Réparer » = réessayer)
         self._reapply_failed = [
             e for e in again if (state := self.hass.states.get(e)) and state.state == STATE_ON

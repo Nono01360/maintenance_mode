@@ -126,6 +126,13 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
   n'importe quelle étape, l'état est cohérent : maintenance en cours avec exactement ses automatisations suspendues, ou
   aucune maintenance et rien de suspendu par l'intégration. Une bascule rejouée peut émettre une seconde fois
   l'évènement `maintenance_mode_started` / `maintenance_mode_ended` (les notifications, elles, sont dédoublonnées).
+- **Suspension par lots** : les automatisations sont suspendues et réactivées par lots de 20, chaque lot avec un délai
+  d'attente de 30 s. La boucle d'évènements de Home Assistant n'est jamais bloquée longtemps (200 automatisations
+  = 10 lots), un lot qui échoue ou se bloque n'empêche pas les suivants (**reprise partielle**) : ses automatisations
+  restent à traiter et une alerte « Réparations » (*Remise en pause impossible*, bouton **Réparer**) permet de
+  réessayer. À la fin d'une maintenance, un lot de réactivation en échec est réessayé automatiquement une
+  automatisation à la fois. Au-delà d'un lot, le panneau affiche la **progression** (« Suspension des automatisations : 80 / 200 »)
+  aux rôles qui peuvent démarrer (`control`) ou régler (`settings`).
 - **Suspension réappliquée** : si Home Assistant redémarre (mise à jour, arrêt brutal) ou si tu recharges les
   automatisations pendant une maintenance, celles qui avaient été suspendues et qui seraient redevenues actives (par
   exemple une automatisation avec `initial_state: true`) sont remises en pause. On ne réapplique que la liste
