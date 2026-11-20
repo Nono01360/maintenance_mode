@@ -15,7 +15,7 @@ PANEL_JS = f"{STATIC_BASE}/panel.js"
 PANEL_URL_PATH = "maintenance"
 PANEL_ELEMENT = "maintenance-mode-panel"
 
-PLATFORMS = ["switch", "sensor", "calendar"]
+PLATFORMS = ["switch", "sensor", "calendar", "binary_sensor"]
 
 # Droits sur le panneau
 ROLE_NONE = "none"      # ne voit rien

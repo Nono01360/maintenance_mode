@@ -178,5 +178,23 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "suspended": {
+        "name": "Suspended automations"
+      },
+      "last_reapply": {
+        "name": "Last re-pause"
+      },
+      "last_hook_failure": {
+        "name": "Last failed hook"
+      }
+    },
+    "binary_sensor": {
+      "problem": {
+        "name": "Problem"
+      }
+    }
   }
 }

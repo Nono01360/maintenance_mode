@@ -31,6 +31,15 @@ class ReconcileMixin:
             "reapply_failed": [e for e in self._reapply_failed if on(e)] if self.current else [],
         }
 
+    def problems(self) -> list[str]:
+        """Ce qui est à regarder : écarts de réconciliation, hook en échec dans la maintenance en cours, stockage illisible."""
+        found = [k for k, entities in self.find_discrepancies().items() if entities]
+        if any(r.get("status") != "ok" for r in self.hook_results):
+            found.append("hook_failed")
+        if ir.async_get(self.hass).async_get_issue(DOMAIN, "storage_unreadable"):
+            found.append("storage_unreadable")
+        return found
+
     @callback
     def _update_issues(self) -> None:
         """Alertes dans Paramètres → Réparations."""

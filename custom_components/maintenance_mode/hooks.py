@@ -20,6 +20,7 @@ from typing import Any
 
 from homeassistant.core import Context
 from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DEFAULT_HOOK_TIMEOUT, HOOK_DOMAINS, HOOK_WHEN, HOOKS_PHASE_BUDGET, MAX_HOOK_TIMEOUT, MAX_HOOKS,
@@ -73,6 +74,10 @@ class HooksMixin:
             results.append(res)
             if res["status"] != "ok":
                 _LOGGER.warning("Hook « %s » (%s) : %s %s", hook["name"], when, res["status"], res.get("error", ""))
+                self.health["last_hook_failure"] = {
+                    "at": dt_util.utcnow().isoformat(), "name": hook["name"], "when": when,
+                    "entity_id": hook["entity_id"], "status": res["status"],
+                }
                 if hook["on_failure"] == "abort":
                     return hook["name"]
         return None

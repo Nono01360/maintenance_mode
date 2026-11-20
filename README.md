@@ -171,6 +171,16 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
 - `sensor.mode_maintenance_prochaine_maintenance` : début de la prochaine maintenance (horodatage).
 - `calendar.mode_maintenance_planning` : maintenances en cours et planifiées (répétitions incluses). Une maintenance
   sans fin est affichée sur 24 h. Utilisable dans le calendrier de HA et comme déclencheur d'automatisation.
+- **Capteurs de santé** (catégorie « diagnostic », visibles dans la page de l'appareil) : leur nom suit la langue de
+  Home Assistant ; retrouve-les dans *Paramètres → Appareils et services → Mode maintenance*.
+  - *Automatisations suspendues* : nombre actuellement suspendues par la maintenance en cours.
+  - *Dernière remise en pause* (horodatage) : dernière fois que des automatisations redevenues actives ont été remises en
+    pause (redémarrage, rechargement des automatisations, bouton « Réparer »). Conservé après un redémarrage.
+  - *Dernier hook en échec* (horodatage ; attributs `name`, `when`, `entity_id`, `status`) : dernier hook qui n'a pas réussi.
+  - `binary_sensor` *Problème* (classe `problem`, attribut `problems`) : allumé si un écart de réconciliation est ouvert
+    (`missing_automations`, `missing_suspended`, `reapply_failed`), si un hook a échoué pendant la maintenance en cours
+    (`hook_failed`) ou si le stockage était illisible (`storage_unreadable`).
+  La valeur de *Problème* est recalculée à chaque enregistrement de l'intégration, pas en continu.
 
 ## Services (administrateurs)
 

@@ -34,7 +34,7 @@ _LOGGER = logging.getLogger(__name__)
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 # unique_id des entités conservées ; les autres (v0.2) sont supprimées
-_KEPT_SUFFIXES = ("_switch", "_next")
+_KEPT_SUFFIXES = ("_switch", "_next", "_calendar", "_suspended", "_last_reapply", "_last_hook_failure", "_problem")
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:

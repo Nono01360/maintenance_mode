@@ -182,6 +182,7 @@ class StorageMixin:
             item.setdefault("hid", uuid.uuid4().hex[:8])   # filet de sécurité : toute entrée a un identifiant
         self.notified = list(data.get("notified", []))[-200:]
         self.pending = data.get("pending")
+        self.health = data["health"] if isinstance(data.get("health"), dict) else {}
         self.report = data["report"] if isinstance(data.get("report"), dict) else {}
         self.hook_results = [r for r in data.get("hook_results") or [] if isinstance(r, dict)]
 
@@ -223,6 +224,7 @@ class StorageMixin:
             "history": self.history,
             "notified": self.notified,
             "pending": self.pending,
+            "health": dict(self.health),
             "report": {**self.report, "baseline": list(self.report.get("baseline", [])),
                        "errors": [dict(e) for e in self.report.get("errors", [])]} if self.report else {},
             "hook_results": self.hook_results,

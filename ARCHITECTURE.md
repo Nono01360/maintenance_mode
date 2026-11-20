@@ -18,6 +18,7 @@ Vue d'ensemble de l'intégration **Mode maintenance** (0.7). Chaque module Pytho
 | `hooks.py` | hooks avant / après (scripts, scènes) : ordre, délai, politique d'échec, protection contre les boucles |
 | `report.py` | bilan de fin : durée réelle, entités devenues indisponibles, erreurs du journal (collecteur borné) |
 | `logbook.py` | description des évènements démarrée / terminée pour le Journal de Home Assistant |
+| `binary_sensor.py` | « Problème » (écarts de réconciliation, hook en échec, stockage illisible) ; les capteurs de santé sont dans `sensor.py` |
 | `transaction.py` | bascule transactionnelle : marqueur `pending` écrit avant d'agir, reprise d'une bascule interrompue au démarrage |
 | `reconcile.py` | réconciliation : écarts détectés (automatisation introuvable, suspendue disparue, remise en pause en échec), alertes réparables |
 | `repairs.py` | flux « Réparer » des alertes (Paramètres → Réparations) |
@@ -54,6 +55,7 @@ bandeau (overlay.js) ◀── attributs de l'entité ◀───────�
 
 Fichier `.storage/maintenance_mode.<entry_id>`, **format 2**.
 
+- Clé `health` (0.9.7, additive) : dernière remise en pause et dernier hook en échec (capteurs de santé).
 - Clé `report` (0.9.5, additive) : bilan en cours (entités indisponibles au départ, erreurs collectées) ; le bilan final est copié dans l'entrée d'historique.
 - Clé `hook_results` (0.9.4, additive) : résultats des hooks de la maintenance en cours, copiés dans l'historique à sa fin.
 - Clé `pending` (0.9.1, additive, le format reste 2) : marqueur de bascule en cours ; vide hors bascule. Une version plus

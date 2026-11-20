@@ -105,6 +105,7 @@ class SuspensionMixin:
             self._reapply_failed = []
             return
         _LOGGER.info("Maintenance en cours : %d automatisation(s) remises en pause", len(again))
+        self.health["last_reapply"] = iso(dt_util.utcnow())
         await self._call_batched("turn_off", again, phase="suspend", stop_actions=True)
         # celles qui restent actives : écart signalé dans Réparations (bouton « Réparer » = réessayer)
         self._reapply_failed = [
@@ -116,4 +117,4 @@ class SuspensionMixin:
             return
         async with self._lock:
             await self._reapply_suspension()
-            self._update_issues()
+            await self._commit()        # alertes, capteurs de santé et enregistrement différé

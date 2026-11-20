@@ -178,5 +178,23 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "suspended": {
+        "name": "Automatisations suspendues"
+      },
+      "last_reapply": {
+        "name": "Dernière remise en pause"
+      },
+      "last_hook_failure": {
+        "name": "Dernier hook en échec"
+      }
+    },
+    "binary_sensor": {
+      "problem": {
+        "name": "Problème"
+      }
+    }
   }
 }

@@ -74,6 +74,7 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Batch
         self._hook_contexts: set[str] = set()
         self.report: dict[str, Any] = {}              # bilan de la maintenance en cours (voir report.py)
         self._log_handler = None
+        self.health: dict[str, Any] = {}              # dernière remise en pause, dernier hook en échec (capteurs)
         self.progress: dict[str, Any] | None = None   # suspension par lots en cours (voir batching.py)
         self._reapply_failed: list[str] = []         # remises en pause en échec (voir reconcile.py)
         self.config: dict[str, Any] = default_config()
