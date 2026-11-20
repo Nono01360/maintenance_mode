@@ -7,7 +7,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-TO_REDACT = {"allowed_users", "panel_access", "notify_services", "started_by", "message"}
+TO_REDACT = {"allowed_users", "panel_access", "notify_services", "started_by", "message", "error"}
 
 
 async def async_get_config_entry_diagnostics(

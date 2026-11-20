@@ -31,6 +31,7 @@ class SuspensionMixin:
         self.disabled = targets
         self._reapply_failed = failed      # lots en échec : alerte « Réparer » = réessayer (reconcile.py)
         self.current = window
+        self._report_start()
         self.hass.bus.async_fire(EVENT_STARTED, window.as_dict())
         await self._notify("started", window)
         self.pending = None      # effacé par l'enregistrement qui suit
@@ -74,6 +75,7 @@ class SuspensionMixin:
                 {**window.as_dict(), "hid": uuid.uuid4().hex[:8], "ended_at": iso(now), "ended_by": ended_by}
             )
             entry = self.history[-1]
+            entry["report"] = self._report_finish(window)
             if self.hook_results:
                 entry["hooks"] = list(self.hook_results)
             self.history = self.history[-MAX_HISTORY:]

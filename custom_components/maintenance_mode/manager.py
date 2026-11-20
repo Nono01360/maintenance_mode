@@ -25,6 +25,7 @@ from .blackout import BlackoutMixin
 from .trash import TrashMixin
 from .validation import ValidationMixin
 from .reconcile import ReconcileMixin
+from .report import ReportMixin
 from .suspension import SuspensionMixin
 from .transaction import TransactionMixin
 from .notifications import NotificationsMixin
@@ -57,7 +58,7 @@ def get_manager(hass: HomeAssistant) -> MaintenanceManager | None:
     return None
 
 
-class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, BatchingMixin, HooksMixin, TransactionMixin, ReconcileMixin, ValidationMixin, BlackoutMixin, TrashMixin, PlanningMixin, StorageMixin, SettingsMixin, ProtectionMixin):
+class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, BatchingMixin, HooksMixin, TransactionMixin, ReconcileMixin, ReportMixin, ValidationMixin, BlackoutMixin, TrashMixin, PlanningMixin, StorageMixin, SettingsMixin, ProtectionMixin):
     """Source de vérité unique ; entités, panneau, services et calendrier la reflètent."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -71,6 +72,8 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Batch
         self.pending: dict[str, Any] | None = None   # bascule en cours (voir transaction.py)
         self.hook_results: list[dict[str, Any]] = []   # résultats des hooks de la maintenance en cours
         self._hook_contexts: set[str] = set()
+        self.report: dict[str, Any] = {}              # bilan de la maintenance en cours (voir report.py)
+        self._log_handler = None
         self.progress: dict[str, Any] | None = None   # suspension par lots en cours (voir batching.py)
         self._reapply_failed: list[str] = []         # remises en pause en échec (voir reconcile.py)
         self.config: dict[str, Any] = default_config()
@@ -89,6 +92,7 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Batch
     @callback
     def async_unload(self) -> None:
         self._unloaded = True
+        self._report_detach()
         self._cancel_timer()
         self._listeners.clear()
         if self._unsub_reload:

@@ -136,6 +136,13 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
   lancé par un hook ne peut pas rappeler les services de l'intégration (`start`, `stop`…) ni son interrupteur : l'appel est
   refusé. Il n'y a pas d'éditeur d'actions : on désigne un script ou une scène existants. Les hooks ne sont pas rejoués
   quand une bascule interrompue est reprise après un arrêt brutal.
+- **Bilan de fin** (dans l'historique, rôles avec `history`) : à la fin d'une maintenance, la **durée réelle**, les
+  **entités devenues indisponibles** depuis le début (celles qui l'étaient déjà au départ ne comptent pas) et les **erreurs
+  du journal** de Home Assistant écrites pendant la maintenance par d'autres composants. Les listes sont **limitées** (20
+  entités, 10 messages d'erreur distincts de 200 caractères au plus, plus un total) et les erreurs identiques sont comptées.
+  Le collecteur d'erreurs n'existe que pendant une maintenance (il est retiré à la fin et au déchargement, et recréé après
+  un rechargement ou un redémarrage). Les erreurs de l'intégration elle-même ne sont pas collectées. Dans les diagnostics,
+  les messages d'erreur sont masqués.
 - **Suspension par lots** : les automatisations sont suspendues et réactivées par lots de 20, chaque lot avec un délai
   d'attente de 30 s. La boucle d'évènements de Home Assistant n'est jamais bloquée longtemps (200 automatisations
   = 10 lots), un lot qui échoue ou se bloque n'empêche pas les suivants (**reprise partielle**) : ses automatisations

@@ -150,6 +150,8 @@ const T = {
     hk_when_before_start: "Avant le début", hk_when_after_start: "Après le début", hk_when_before_end: "Avant la fin", hk_when_after_end: "Après la fin",
     hk_fail_continue: "En cas d'échec : continuer", hk_fail_abort: "En cas d'échec : annuler le démarrage",
     h_hooks: "Hooks : {ok} réussi(s), {ko} en échec ou ignoré(s)",
+    rep_duration: "Durée réelle : {d}", rep_unavail: "{n} entité(s) devenue(s) indisponible(s)", rep_errors: "{n} erreur(s) dans le journal",
+    rep_more: "(liste limitée aux premières)", rep_none: "rien à signaler",
     err_confirmation_required: "Cette action suspendra {count} automatisations : confirmation requise.",
     err_undo_expired: "Le délai d'annulation est dépassé (ou l'élément ne peut plus être restauré).",
     err_template_not_found: "Modèle introuvable.",
@@ -269,6 +271,8 @@ const T = {
     hk_when_before_start: "Before start", hk_when_after_start: "After start", hk_when_before_end: "Before end", hk_when_after_end: "After end",
     hk_fail_continue: "On failure: continue", hk_fail_abort: "On failure: cancel the start",
     h_hooks: "Hooks: {ok} succeeded, {ko} failed or skipped",
+    rep_duration: "Actual duration: {d}", rep_unavail: "{n} entit(y/ies) became unavailable", rep_errors: "{n} error(s) in the log",
+    rep_more: "(list limited to the first ones)", rep_none: "nothing to report",
     err_confirmation_required: "This action will pause {count} automations: confirmation required.",
     err_undo_expired: "The undo period has passed (or the item can no longer be restored).",
     err_template_not_found: "Template not found.",
@@ -836,6 +840,23 @@ class MaintenanceModePanel extends HTMLElement {
     return html;
   }
 
+  _durText(s) {
+    const m = Math.max(0, Math.round(Number(s) / 60));
+    return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`;
+  }
+
+  // Bilan de fin : durée réelle, entités devenues indisponibles, erreurs du journal (listes déjà limitées par le serveur)
+  _reportHtml(r) {
+    const un = r.unavailable_total || 0, er = r.errors_total || 0;
+    const parts = [this._t("rep_duration", { d: this._durText(r.duration) })];
+    if (un) parts.push(this._t("rep_unavail", { n: un }));
+    if (er) parts.push(this._t("rep_errors", { n: er }));
+    if (!un && !er) parts.push(this._t("rep_none"));
+    const details = (un ? `<div>${(r.unavailable || []).map((e) => `<code>${esc(e)}</code>`).join(" ")}${un > (r.unavailable || []).length ? ` <span class="muted">${this._t("rep_more")}</span>` : ""}</div>` : "")
+      + (er ? `<ul>${(r.errors || []).map((e) => `<li><code>${esc(e.logger)}</code> ${esc(e.message)}${e.count > 1 ? ` ×${esc(e.count)}` : ""}</li>`).join("")}</ul>` : "");
+    return `<details class="muted" style="margin-top:4px" data-role="report"><summary>${parts.join(" · ")}</summary>${details}</details>`;
+  }
+
   _hooksCardHtml(dr) {
     const ents = Object.keys(this._hass?.states || {}).filter((e) => /^(script|scene)\./.test(e)).sort();
     const whens = ["before_start", "after_start", "before_end", "after_end"];
@@ -876,6 +897,7 @@ class MaintenanceModePanel extends HTMLElement {
           <div class="grow"><h3>${this._fmt(h.start)} → ${this._fmt(h.ended_at)}</h3>
             <div class="muted">${endStatus}${byText}</div>${h.reason ? `<div style="margin-top:4px">${esc(h.reason)}</div>` : ""}
             ${this._chips(h)}
+            ${h.report ? this._reportHtml(h.report) : ""}
             ${h.hooks && h.hooks.length ? `<div class="muted" style="margin-top:4px" data-role="hook-results">${this._t("h_hooks", { ok: h.hooks.filter((x) => x.status === "ok").length, ko: h.hooks.filter((x) => x.status !== "ok").length })}</div>` : ""}
           </div>
           ${canDelete && h.hid ? `<button class="btn sm danger" data-action="delete-history" data-hid="${esc(h.hid)}">${delText}</button>` : ""}

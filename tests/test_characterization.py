@@ -263,7 +263,7 @@ async def test_stored_format(hass, hass_storage):
     stored = hass_storage[_key(entry)]
     assert stored["version"] == 2
     # 0.9.1 : clé additive « pending » (marqueur de bascule, vide hors bascule) ; le format reste 2
-    assert set(stored["data"]) == {"config", "disabled", "current", "schedule", "history", "notified", "pending", "hook_results"}
+    assert set(stored["data"]) == {"config", "disabled", "current", "schedule", "history", "notified", "pending", "hook_results", "report"}
     assert stored["data"]["pending"] is None
     assert set(stored["data"]["config"]) == {
         "automations", "allowed_users", "warn_minutes", "message", "panel_access", "notify_services", "notify_kinds",

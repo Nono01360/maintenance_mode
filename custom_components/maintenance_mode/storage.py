@@ -182,6 +182,7 @@ class StorageMixin:
             item.setdefault("hid", uuid.uuid4().hex[:8])   # filet de sécurité : toute entrée a un identifiant
         self.notified = list(data.get("notified", []))[-200:]
         self.pending = data.get("pending")
+        self.report = data["report"] if isinstance(data.get("report"), dict) else {}
         self.hook_results = [r for r in data.get("hook_results") or [] if isinstance(r, dict)]
 
         self.current = Window.from_dict(data["current"]) if data.get("current") else None
@@ -193,6 +194,8 @@ class StorageMixin:
         self._unsub_reload = self.hass.bus.async_listen(
             EVENT_AUTOMATION_RELOADED, self._async_on_automation_reload
         )
+        if self.current:        # maintenance en cours (rechargement, redémarrage) : le bilan continue
+            self._report_attach() if self.report else self._report_start()
         async_at_started(self.hass, self._async_resume)
 
     async def _async_report_integrity(self, raw: Any, problems: list[str]) -> None:
@@ -220,6 +223,8 @@ class StorageMixin:
             "history": self.history,
             "notified": self.notified,
             "pending": self.pending,
+            "report": {**self.report, "baseline": list(self.report.get("baseline", [])),
+                       "errors": [dict(e) for e in self.report.get("errors", [])]} if self.report else {},
             "hook_results": self.hook_results,
         }
 
