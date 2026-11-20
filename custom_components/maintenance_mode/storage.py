@@ -136,6 +136,7 @@ def default_config() -> dict[str, Any]:
         "selected_areas": [],         # zones dont les automatisations sont visées
         "excluded_automations": [],   # jamais suspendues, même si sélectionnées
         "excluded_labels": [],        # idem pour toutes les automatisations portant une de ces étiquettes
+        "hooks": [],                  # scripts / scènes exécutés avant ou après une maintenance (hooks.py)
         "confirm_threshold": DEFAULT_CONFIRM_THRESHOLD,   # confirmation explicite au-delà de ce nombre (0 = jamais)
         "blackouts": [],             # plages interdites : [{id, name, days, start, end}]
         "max_duration_minutes": 0,   # durée maximale par défaut (minutes) ; 0 = aucune
@@ -181,6 +182,7 @@ class StorageMixin:
             item.setdefault("hid", uuid.uuid4().hex[:8])   # filet de sécurité : toute entrée a un identifiant
         self.notified = list(data.get("notified", []))[-200:]
         self.pending = data.get("pending")
+        self.hook_results = [r for r in data.get("hook_results") or [] if isinstance(r, dict)]
 
         self.current = Window.from_dict(data["current"]) if data.get("current") else None
         self.schedule = [w for d in data.get("schedule", []) if (w := Window.from_dict(d))]
@@ -218,6 +220,7 @@ class StorageMixin:
             "history": self.history,
             "notified": self.notified,
             "pending": self.pending,
+            "hook_results": self.hook_results,
         }
 
     async def async_flush(self) -> None:

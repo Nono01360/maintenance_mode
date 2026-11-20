@@ -7,6 +7,7 @@ from typing import Any
 from homeassistant.const import STATE_ON
 from homeassistant.util import dt as dt_util
 
+from .errors import MaintenanceError
 from .const import EVENT_ENDED, EVENT_STARTED, MAX_HISTORY
 from .window import Window, iso
 import uuid
@@ -34,8 +35,29 @@ class SuspensionMixin:
         await self._notify("started", window)
         self.pending = None      # effacé par l'enregistrement qui suit
 
-    async def _deactivate(self, ended_by: str = "manual") -> None:
+    async def _start_with_hooks(self, window: Window, *, scheduled: bool = False) -> None:
+        """Démarre `window` : hooks « avant », (remplacement de la maintenance en cours), suspension, état écrit, hooks « après »."""
+        before: list[dict] = []
+        aborted_by = await self._run_hooks("before_start", before)
+        if aborted_by:
+            if not scheduled:
+                raise MaintenanceError("hook_aborted", name=aborted_by)
+            entry = {**window.as_dict(), "hid": uuid.uuid4().hex[:8], "ended_at": iso(dt_util.utcnow()),
+                     "ended_by": "hook_aborted", "hooks": before}
+            self.history = [*self.history, entry][-MAX_HISTORY:]
+            return
+        if self.current:
+            await self._deactivate("replaced")
+        self.hook_results = before
+        await self._activate(window)
+        await self._commit(now=True)            # l'état est écrit AVANT les hooks « après » (qui peuvent être longs)
+        await self._run_hooks("after_start", self.hook_results)
+        await self._commit()
+
+    async def _deactivate(self, ended_by: str = "manual", *, hooks: bool = True) -> None:
         window = self.current
+        if window and hooks:
+            await self._run_hooks("before_end", self.hook_results)
         if self.disabled:
             await self._begin("deactivate", ended_by=ended_by)
             failed = await self._call_batched("turn_on", self.disabled, phase="resume")
@@ -51,10 +73,18 @@ class SuspensionMixin:
             self.history.append(
                 {**window.as_dict(), "hid": uuid.uuid4().hex[:8], "ended_at": iso(now), "ended_by": ended_by}
             )
+            entry = self.history[-1]
+            if self.hook_results:
+                entry["hooks"] = list(self.hook_results)
             self.history = self.history[-MAX_HISTORY:]
             self.hass.bus.async_fire(EVENT_ENDED, {**window.as_dict(), "ended_by": ended_by})
             if ended_by != "replaced":
                 await self._notify("ended", window)
+            if hooks:
+                await self._run_hooks("after_end", self.hook_results)
+                if self.hook_results:
+                    entry["hooks"] = list(self.hook_results)
+        self.hook_results = []
         self.pending = None      # effacé par l'enregistrement qui suit
 
     async def _reapply_suspension(self) -> None:

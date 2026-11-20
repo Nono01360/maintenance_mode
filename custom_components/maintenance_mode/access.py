@@ -121,6 +121,8 @@ class AccessMixin:
             for key in _SETTINGS_KEYS:
                 value = self.config[key]
                 cfg[key] = list(value) if isinstance(value, list) else value
+            if user.is_admin:        # les hooks exécutent des scripts : visibles et modifiables par les administrateurs HA seulement
+                cfg["hooks"] = [dict(h) for h in self.config["hooks"]]
         if perms & {"templates", "schedule", "control"}:
             cfg["templates"] = [dict(t) for t in self.config["templates"]]
         if "access" in perms:

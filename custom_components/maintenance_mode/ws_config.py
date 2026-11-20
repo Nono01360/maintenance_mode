@@ -9,7 +9,7 @@ from homeassistant.components import websocket_api
 from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import config_validation as cv
 
-from .const import BANNER_MODES, MAX_CONFIRM_THRESHOLD, MAX_DURATION_MINUTES, NOTIFY_KINDS, PERMISSIONS, REPEATS
+from .const import HOOK_WHEN, MAX_HOOK_TIMEOUT, MAX_HOOKS, BANNER_MODES, MAX_CONFIRM_THRESHOLD, MAX_DURATION_MINUTES, NOTIFY_KINDS, PERMISSIONS, REPEATS
 from .limits import ID, MAX_ENTITIES, MAX_LIST, MAX_USERS, PAGES, TEXT, bounded_list
 from .ws_common import _command
 
@@ -62,10 +62,21 @@ _CONFIG_PERMS = {
     "selected_areas": "settings",
     "excluded_automations": "settings",
     "excluded_labels": "settings",
+    "hooks": "settings",          # + administrateur Home Assistant (exécute des scripts : voir ws_update_config)
     "templates": "templates",
     "roles": "access",
     "panel_access": "access",
 }
+
+
+_HOOK = vol.Schema({
+    vol.Optional("id"): ID,
+    vol.Optional("name", default=""): vol.All(cv.string, vol.Length(max=40)),
+    vol.Required("when"): vol.In(HOOK_WHEN),
+    vol.Required("entity_id"): vol.All(cv.string, vol.Length(max=255)),
+    vol.Optional("timeout", default=30): vol.All(vol.Coerce(float), vol.Range(min=1, max=MAX_HOOK_TIMEOUT)),
+    vol.Optional("on_failure", default="continue"): vol.In(("continue", "abort")),
+})
 
 
 @websocket_api.websocket_command(
@@ -81,6 +92,7 @@ _CONFIG_PERMS = {
         vol.Optional("banner_mode"): vol.In(BANNER_MODES),
         vol.Optional("banner_scroll"): cv.boolean,
         vol.Optional("compat_mode"): cv.boolean,
+        vol.Optional("hooks"): bounded_list(_HOOK, MAX_HOOKS),
         vol.Optional("confirm_threshold"): vol.All(vol.Coerce(int), vol.Range(min=0, max=MAX_CONFIRM_THRESHOLD)),
         vol.Optional("blackouts"): bounded_list(_BLACKOUT, MAX_LIST),
         vol.Optional("max_duration_minutes"): vol.All(vol.Coerce(int), vol.Range(min=0, max=MAX_DURATION_MINUTES)),
@@ -98,6 +110,8 @@ async def ws_update_config(hass, connection, msg, manager) -> dict[str, Any]:
     changes = {k: v for k, v in msg.items() if k not in ("id", "type")}
     perms = manager.perms_for(connection.user)
     if not {_CONFIG_PERMS[k] for k in changes} <= perms:
+        raise Unauthorized
+    if "hooks" in changes and not connection.user.is_admin:       # exécuter des scripts : réservé aux administrateurs HA
         raise Unauthorized
     manager.check_config_rate()
     await manager.async_update_config(changes, actor_perms=perms)

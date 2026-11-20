@@ -24,11 +24,13 @@ class MaintenanceSwitch(MaintenanceEntity, SwitchEntity):
         return self.manager.current is not None
 
     async def async_turn_on(self, **kwargs: Any) -> None:
+        self.manager.check_not_in_hook(self._context)
         await self.manager.async_start_now(
             end=None, reason="", pages=[], pause=True, by="interrupteur"
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        self.manager.check_not_in_hook(self._context)
         await self.manager.async_stop()
 
     @property

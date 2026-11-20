@@ -9,6 +9,7 @@ from homeassistant.util import dt as dt_util
 
 from .errors import MaintenanceError
 from .blackout import clean_blackouts
+from .hooks import clean_hooks
 from .const import MAX_CONFIRM_THRESHOLD, MAX_DURATION_MINUTES, MAX_EXCLUDED_LABELS, BANNER_MODES, DEFAULT_MESSAGE, FORBIDDEN_NOTIFY, NOTIFY_KINDS
 from .window import parse_iso
 
@@ -85,6 +86,8 @@ class SettingsMixin:
                 cfg["notify_kinds"] = [k for k in NOTIFY_KINDS if k in changes["notify_kinds"]]
             if "banner_mode" in changes and changes["banner_mode"] in BANNER_MODES:
                 cfg["banner_mode"] = changes["banner_mode"]
+            if "hooks" in changes:
+                cfg["hooks"] = clean_hooks(changes["hooks"])
             if "banner_scroll" in changes:
                 cfg["banner_scroll"] = bool(changes["banner_scroll"])
             if "confirm_threshold" in changes:

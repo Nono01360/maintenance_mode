@@ -41,4 +41,4 @@ class TransactionMixin:
             targets = [e for e in pending.get("targets", []) if self.hass.states.get(e)]
             await self._activate(window, targets)
         else:
-            await self._deactivate(pending.get("ended_by", "manual"))
+            await self._deactivate(pending.get("ended_by", "manual"), hooks=False)

@@ -143,6 +143,13 @@ const T = {
     err_access_denied: "Accès refusé.",
     err_max_duration_exceeded: "La durée dépasse la durée maximale ({max} min).",
     err_blackout_period: "Cette période est interdite pour une maintenance ({name}).",
+    err_hook_loop: "Cette action est refusée depuis un hook (risque de boucle).", err_hook_aborted: "Démarrage annulé : le hook « {name} » a échoué.",
+    s_hooks: "Hooks (scripts et scènes)", e_hook_aborted: "démarrage annulé par un hook",
+    hooks_hint: "Un script ou une scène exécuté à un moment précis, un par un dans l'ordre de la liste, avec un délai maximum. « Annuler le démarrage » n'existe que pour « avant le début ». Réservé aux administrateurs Home Assistant.",
+    hk_none: "Aucun hook.", hk_add: "Ajouter un hook", hk_name_ph: "Nom du hook", hk_entity_ph: "script.mon_script ou scene.ma_scene", hk_timeout: "Délai max (s)",
+    hk_when_before_start: "Avant le début", hk_when_after_start: "Après le début", hk_when_before_end: "Avant la fin", hk_when_after_end: "Après la fin",
+    hk_fail_continue: "En cas d'échec : continuer", hk_fail_abort: "En cas d'échec : annuler le démarrage",
+    h_hooks: "Hooks : {ok} réussi(s), {ko} en échec ou ignoré(s)",
     err_confirmation_required: "Cette action suspendra {count} automatisations : confirmation requise.",
     err_undo_expired: "Le délai d'annulation est dépassé (ou l'élément ne peut plus être restauré).",
     err_template_not_found: "Modèle introuvable.",
@@ -255,6 +262,13 @@ const T = {
     err_access_denied: "Access denied.",
     err_max_duration_exceeded: "The duration exceeds the maximum duration ({max} min).",
     err_blackout_period: "This period is forbidden for maintenance ({name}).",
+    err_hook_loop: "This action is refused from a hook (loop risk).", err_hook_aborted: "Start cancelled: the hook \"{name}\" failed.",
+    s_hooks: "Hooks (scripts and scenes)", e_hook_aborted: "start cancelled by a hook",
+    hooks_hint: "A script or scene run at a precise moment, one at a time in list order, with a maximum delay. \"Cancel the start\" only exists for \"before start\". Home Assistant administrators only.",
+    hk_none: "No hook.", hk_add: "Add a hook", hk_name_ph: "Hook name", hk_entity_ph: "script.my_script or scene.my_scene", hk_timeout: "Max delay (s)",
+    hk_when_before_start: "Before start", hk_when_after_start: "After start", hk_when_before_end: "Before end", hk_when_after_end: "After end",
+    hk_fail_continue: "On failure: continue", hk_fail_abort: "On failure: cancel the start",
+    h_hooks: "Hooks: {ok} succeeded, {ko} failed or skipped",
     err_confirmation_required: "This action will pause {count} automations: confirmation required.",
     err_undo_expired: "The undo period has passed (or the item can no longer be restored).",
     err_template_not_found: "Template not found.",
@@ -299,6 +313,7 @@ const SETTINGS_BLOCKS = {
   autos: ["automations"],
   protect: ["excluded_automations", "excluded_labels"],
   blackout: ["blackouts"],
+  hooks: ["hooks"],
   select: ["selected_labels", "selected_areas"],
   users: ["allowed_users"],
   notify: ["notify_services", "notify_kinds", "end_soon_minutes"],
@@ -491,6 +506,7 @@ class MaintenanceModePanel extends HTMLElement {
       compat_mode: c.compat_mode === true,
       max_duration_minutes: Number(c.max_duration_minutes) || 0,
       confirm_threshold: Number(c.confirm_threshold ?? 20),
+      hooks: (c.hooks || []).map((h) => ({ ...h })),
       blackouts: (c.blackouts || []).map((b) => ({ id: b.id, name: b.name, days: [...b.days], start: b.start, end: b.end })),
       excluded_automations: [...(c.excluded_automations || [])],
       excluded_labels: [...(c.excluded_labels || [])],
@@ -522,6 +538,7 @@ class MaintenanceModePanel extends HTMLElement {
       compat_mode: d.compat_mode,
       max_duration_minutes: Number(d.max_duration_minutes) || 0,
       confirm_threshold: Number(d.confirm_threshold) || 0,
+      hooks: (d.hooks || []).map((h) => ({ ...(h.id ? { id: h.id } : {}), name: (h.name || "").trim(), when: h.when, entity_id: (h.entity_id || "").trim(), timeout: Number(h.timeout) || 30, on_failure: h.on_failure })),
       blackouts: d.blackouts.map((b) => ({ ...(b.id ? { id: b.id } : {}), name: b.name.trim(), days: b.days, start: b.start, end: b.end })),
       excluded_automations: d.excluded_automations,
       excluded_labels: d.excluded_labels,
@@ -819,10 +836,33 @@ class MaintenanceModePanel extends HTMLElement {
     return html;
   }
 
+  _hooksCardHtml(dr) {
+    const ents = Object.keys(this._hass?.states || {}).filter((e) => /^(script|scene)\./.test(e)).sort();
+    const whens = ["before_start", "after_start", "before_end", "after_end"];
+    return `<ha-card class="card" data-role="hooks"><div class="col">
+      <div><h2>${this._t("s_hooks")}</h2><div class="muted">${this._t("hooks_hint")}</div></div>
+      <datalist id="hook-entities">${ents.map((e) => `<option value="${esc(e)}"></option>`).join("")}</datalist>
+      ${dr.hooks.length ? dr.hooks.map((h, i) => `<div class="item" style="flex-direction:column;gap:8px">
+        <div class="row" style="width:100%">
+          <input type="text" maxlength="40" placeholder="${esc(this._t("hk_name_ph"))}" data-field="hk.name" data-idx="${i}" value="${esc(h.name)}">
+          <button class="btn sm danger" data-action="delete-hook" data-idx="${i}">${this._t("delete")}</button></div>
+        <div class="grid2">
+          <select data-action="hk-when" data-idx="${i}">${whens.map((w) => `<option value="${w}" ${h.when === w ? "selected" : ""}>${this._t("hk_when_" + w)}</option>`).join("")}</select>
+          <input type="text" list="hook-entities" maxlength="255" placeholder="${esc(this._t("hk_entity_ph"))}" data-field="hk.entity" data-idx="${i}" value="${esc(h.entity_id)}"></div>
+        <div class="grid2">
+          <label class="field">${this._t("hk_timeout")}<input type="number" min="1" max="120" data-field="hk.timeout" data-idx="${i}" value="${esc(h.timeout)}"></label>
+          <select data-action="hk-fail" data-idx="${i}" ${h.when === "before_start" ? "" : "disabled"}>
+            <option value="continue" ${h.on_failure !== "abort" ? "selected" : ""}>${this._t("hk_fail_continue")}</option>
+            <option value="abort" ${h.on_failure === "abort" ? "selected" : ""}>${this._t("hk_fail_abort")}</option></select></div>
+      </div>`).join("") : `<div class="muted">${this._t("hk_none")}</div>`}
+      <div><button class="btn sm" data-action="add-hook">${this._t("hk_add")}</button></div>
+      ${this._blockActions("hooks")}</div></ha-card>`;
+  }
+
   _historyHtml() {
     const hist = this._data.history || [];
     const canDelete = this._can("history_delete");
-    const ended = { manual: "e_manual", auto: "e_auto", replaced: "e_replaced", max_duration: "e_max_duration" };
+    const ended = { manual: "e_manual", auto: "e_auto", replaced: "e_replaced", max_duration: "e_max_duration", hook_aborted: "e_hook_aborted" };
     const clearText = this._confirm === "hist:all" ? this._t("h_clear_confirm") : this._t("h_clear");
     return `<ha-card class="card">
       <div class="row"><div class="grow"><h2>${this._t("h_title")}</h2></div>
@@ -836,6 +876,7 @@ class MaintenanceModePanel extends HTMLElement {
           <div class="grow"><h3>${this._fmt(h.start)} → ${this._fmt(h.ended_at)}</h3>
             <div class="muted">${endStatus}${byText}</div>${h.reason ? `<div style="margin-top:4px">${esc(h.reason)}</div>` : ""}
             ${this._chips(h)}
+            ${h.hooks && h.hooks.length ? `<div class="muted" style="margin-top:4px" data-role="hook-results">${this._t("h_hooks", { ok: h.hooks.filter((x) => x.status === "ok").length, ko: h.hooks.filter((x) => x.status !== "ok").length })}</div>` : ""}
           </div>
           ${canDelete && h.hid ? `<button class="btn sm danger" data-action="delete-history" data-hid="${esc(h.hid)}">${delText}</button>` : ""}
         </div>`;
@@ -985,6 +1026,8 @@ class MaintenanceModePanel extends HTMLElement {
         </div>`).join("") : `<div class="muted">${this._t("bo_none")}</div>`}
         <div><button class="btn sm" data-action="add-blackout">${this._t("bo_add")}</button></div>
       ${this._blockActions("blackout")}</div></ha-card>
+
+      ${dr.hooks && this._data.config.hooks ? this._hooksCardHtml(dr) : ""}
 
       <ha-card class="card"><div class="col">
         <div><h2>${this._t("s_select")}</h2><div class="muted">${this._t("select_hint")}</div></div>
@@ -1203,6 +1246,9 @@ class MaintenanceModePanel extends HTMLElement {
     else if (field === "form.tplName") this._form.tplName = t.value;
     else if (field === "role.name") { this._rolesDraft[Number(t.dataset.idx)].name = t.value; this._markRolesDirty(); }
     else if (field === "draft.message") { this._draft.message = t.value; this._markDirty(); }
+    else if (field === "hk.name") { this._draft.hooks[Number(t.dataset.idx)].name = t.value; this._markDirty(); }
+    else if (field === "hk.entity") { this._draft.hooks[Number(t.dataset.idx)].entity_id = t.value; this._markDirty(); }
+    else if (field === "hk.timeout") { this._draft.hooks[Number(t.dataset.idx)].timeout = t.value; this._markDirty(); }
     else if (field === "bo.name") { this._draft.blackouts[Number(t.dataset.idx)].name = t.value; this._markDirty(); }
     else if (field === "bo.start") { this._draft.blackouts[Number(t.dataset.idx)].start = t.value; this._markDirty(); }
     else if (field === "bo.end") { this._draft.blackouts[Number(t.dataset.idx)].end = t.value; this._markDirty(); }
@@ -1452,6 +1498,20 @@ async _act(action, target) {
       clearTimeout(this._undoTimer);
       if (u) await this._call("undo_delete", { token: u.token });
       else this._render(true);
+    } else if (action === "add-hook") {
+      this._draft.hooks.push({ id: null, name: "", when: "after_start", entity_id: "", timeout: 30, on_failure: "continue" });
+      this._markDirty(); this._render(true);
+    } else if (action === "delete-hook") {
+      this._draft.hooks.splice(Number(target.dataset.idx), 1);
+      this._markDirty(); this._render(true);
+    } else if (action === "hk-when") {
+      const h = this._draft.hooks[Number(target.dataset.idx)];
+      h.when = target.value;
+      if (h.when !== "before_start") h.on_failure = "continue";      // « annuler » n'a de sens qu'avant le début
+      this._markDirty(); this._render(true);
+    } else if (action === "hk-fail") {
+      this._draft.hooks[Number(target.dataset.idx)].on_failure = target.value;
+      this._markDirty();
     } else if (action === "add-blackout") {
       this._draft.blackouts.push({ id: null, name: "", days: [], start: "22:00", end: "06:00" });
       this._markDirty(); this._render(true);

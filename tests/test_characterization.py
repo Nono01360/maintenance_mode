@@ -263,11 +263,11 @@ async def test_stored_format(hass, hass_storage):
     stored = hass_storage[_key(entry)]
     assert stored["version"] == 2
     # 0.9.1 : clé additive « pending » (marqueur de bascule, vide hors bascule) ; le format reste 2
-    assert set(stored["data"]) == {"config", "disabled", "current", "schedule", "history", "notified", "pending"}
+    assert set(stored["data"]) == {"config", "disabled", "current", "schedule", "history", "notified", "pending", "hook_results"}
     assert stored["data"]["pending"] is None
     assert set(stored["data"]["config"]) == {
         "automations", "allowed_users", "warn_minutes", "message", "panel_access", "notify_services", "notify_kinds",
-        "end_soon_minutes", "templates", "roles", "banner_mode", "banner_scroll", "compat_mode", "max_duration_minutes", "blackouts", "confirm_threshold", "selected_labels", "selected_areas", "excluded_automations", "excluded_labels",
+        "end_soon_minutes", "templates", "roles", "banner_mode", "banner_scroll", "compat_mode", "max_duration_minutes", "blackouts", "confirm_threshold", "selected_labels", "selected_areas", "excluded_automations", "excluded_labels", "hooks",
     }
     assert set(stored["data"]["current"]) == {
         "id", "start", "end", "reason", "pages", "pause_automations", "repeat", "anchor_day", "started_by", "max_minutes", "capped", "blackout_override",

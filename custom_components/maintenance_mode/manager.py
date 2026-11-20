@@ -20,6 +20,7 @@ from .settings import SettingsMixin
 from .storage import STORAGE_VERSION, MaintenanceStore, StorageMixin, default_config
 from .planning import PlanningMixin
 from .batching import BatchingMixin
+from .hooks import HooksMixin
 from .blackout import BlackoutMixin
 from .trash import TrashMixin
 from .validation import ValidationMixin
@@ -56,7 +57,7 @@ def get_manager(hass: HomeAssistant) -> MaintenanceManager | None:
     return None
 
 
-class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, BatchingMixin, TransactionMixin, ReconcileMixin, ValidationMixin, BlackoutMixin, TrashMixin, PlanningMixin, StorageMixin, SettingsMixin, ProtectionMixin):
+class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, BatchingMixin, HooksMixin, TransactionMixin, ReconcileMixin, ValidationMixin, BlackoutMixin, TrashMixin, PlanningMixin, StorageMixin, SettingsMixin, ProtectionMixin):
     """Source de vérité unique ; entités, panneau, services et calendrier la reflètent."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -68,6 +69,8 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Batch
         self.history: list[dict[str, Any]] = []
         self.notified: list[str] = []
         self.pending: dict[str, Any] | None = None   # bascule en cours (voir transaction.py)
+        self.hook_results: list[dict[str, Any]] = []   # résultats des hooks de la maintenance en cours
+        self._hook_contexts: set[str] = set()
         self.progress: dict[str, Any] | None = None   # suspension par lots en cours (voir batching.py)
         self._reapply_failed: list[str] = []         # remises en pause en échec (voir reconcile.py)
         self.config: dict[str, Any] = default_config()
@@ -137,10 +140,7 @@ class MaintenanceManager(AccessMixin, NotificationsMixin, SuspensionMixin, Batch
                 max_minutes=max_minutes,
                 blackout_override=overridden,
             )
-            if self.current:
-                await self._deactivate("replaced")
-            await self._activate(window)
-            await self._commit(now=True)
+            await self._start_with_hooks(window)
 
     async def async_stop(self) -> None:
         async with self._lock:

@@ -126,6 +126,16 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
   n'importe quelle étape, l'état est cohérent : maintenance en cours avec exactement ses automatisations suspendues, ou
   aucune maintenance et rien de suspendu par l'intégration. Une bascule rejouée peut émettre une seconde fois
   l'évènement `maintenance_mode_started` / `maintenance_mode_ended` (les notifications, elles, sont dédoublonnées).
+- **Hooks avant / après** (Paramètres → Hooks, administrateurs Home Assistant seulement) : un **script** ou une **scène**
+  exécuté à un moment précis : *avant le début* (avant toute suspension), *après le début*, *avant la fin*
+  (automatisations encore suspendues), *après la fin*. Les hooks d'un moment s'exécutent **un par un, dans l'ordre de la
+  liste**, chacun avec un **délai maximum** (1 à 120 s, 30 par défaut) ; l'ensemble d'un moment a un budget de 300 s
+  (les hooks restants sont ignorés). **Politique d'échec** : *continuer* (défaut) ou, pour *avant le début* seulement,
+  *annuler le démarrage* (une maintenance planifiée est alors abandonnée et notée dans l'historique). Le résultat de chaque hook
+  (réussi, échec, délai dépassé, introuvable, ignoré) apparaît dans l'historique. **Protection contre les boucles** : un script
+  lancé par un hook ne peut pas rappeler les services de l'intégration (`start`, `stop`…) ni son interrupteur : l'appel est
+  refusé. Il n'y a pas d'éditeur d'actions : on désigne un script ou une scène existants. Les hooks ne sont pas rejoués
+  quand une bascule interrompue est reprise après un arrêt brutal.
 - **Suspension par lots** : les automatisations sont suspendues et réactivées par lots de 20, chaque lot avec un délai
   d'attente de 30 s. La boucle d'évènements de Home Assistant n'est jamais bloquée longtemps (200 automatisations
   = 10 lots), un lot qui échoue ou se bloque n'empêche pas les suivants (**reprise partielle**) : ses automatisations

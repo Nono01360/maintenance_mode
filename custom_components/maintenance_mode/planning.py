@@ -24,10 +24,8 @@ class PlanningMixin:
                 self.schedule.sort(key=lambda w: w.start)
             if window.end and window.end <= now:
                 continue  # entièrement passée (ex. HA éteint)
-            if self.current:
-                await self._deactivate("replaced")
             window.started_by = window.started_by or "planification"
-            await self._activate(window)
+            await self._start_with_hooks(window, scheduled=True)
 
     async def _async_resume(self, _hass: HomeAssistant | None = None) -> None:
         if self._unloaded:

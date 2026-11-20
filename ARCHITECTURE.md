@@ -15,6 +15,7 @@ Vue d'ensemble de l'intégration **Mode maintenance** (0.7). Chaque module Pytho
 | `settings.py` | mise à jour des réglages (avec anti-escalade des droits), suppression d'historique |
 | `suspension.py` | suspension / réactivation / remise en pause des automatisations (instantané pris au démarrage) |
 | `batching.py` | suspension / réactivation par lots : délai d'attente par lot, reprise partielle, progression |
+| `hooks.py` | hooks avant / après (scripts, scènes) : ordre, délai, politique d'échec, protection contre les boucles |
 | `transaction.py` | bascule transactionnelle : marqueur `pending` écrit avant d'agir, reprise d'une bascule interrompue au démarrage |
 | `reconcile.py` | réconciliation : écarts détectés (automatisation introuvable, suspendue disparue, remise en pause en échec), alertes réparables |
 | `repairs.py` | flux « Réparer » des alertes (Paramètres → Réparations) |
@@ -51,6 +52,7 @@ bandeau (overlay.js) ◀── attributs de l'entité ◀───────�
 
 Fichier `.storage/maintenance_mode.<entry_id>`, **format 2**.
 
+- Clé `hook_results` (0.9.4, additive) : résultats des hooks de la maintenance en cours, copiés dans l'historique à sa fin.
 - Clé `pending` (0.9.1, additive, le format reste 2) : marqueur de bascule en cours ; vide hors bascule. Une version plus
   ancienne l'ignore.
 - Migration 1 → 2 (`migrate_data`) : conversion des anciens formats (0.2 : `active`, `start_armed`), identifiants

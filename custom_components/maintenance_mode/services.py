@@ -54,6 +54,7 @@ def _end(data: dict, base: datetime) -> datetime | None:
 
 def async_register(hass: HomeAssistant) -> None:
     async def _start(call: ServiceCall) -> None:
+        _manager(hass).check_not_in_hook(call.context)
         d = call.data
         await _manager(hass).async_start_now(
             end=_end(d, dt_util.utcnow()),
@@ -62,9 +63,11 @@ def async_register(hass: HomeAssistant) -> None:
         )
 
     async def _stop(call: ServiceCall) -> None:
+        _manager(hass).check_not_in_hook(call.context)
         await _manager(hass).async_stop()
 
     async def _schedule(call: ServiceCall) -> None:
+        _manager(hass).check_not_in_hook(call.context)
         d = call.data
         start = dt_util.as_utc(d["start"])
         await _manager(hass).async_add_window(
@@ -74,9 +77,11 @@ def async_register(hass: HomeAssistant) -> None:
         )
 
     async def _cancel(call: ServiceCall) -> None:
+        _manager(hass).check_not_in_hook(call.context)
         await _manager(hass).async_delete_window(call.data["window_id"])
 
     async def _clear_history(call: ServiceCall) -> None:
+        _manager(hass).check_not_in_hook(call.context)
         await _manager(hass).async_clear_history(call.data.get("older_than"))
 
     async def _preview(call: ServiceCall) -> dict:

@@ -74,6 +74,14 @@ BATCH_SIZE = 20
 BATCH_TIMEOUT = 30.0
 BATCH_PAUSE = 0
 
+# Hooks (9.4)
+HOOK_WHEN = ("before_start", "after_start", "before_end", "after_end")
+HOOK_DOMAINS = ("script", "scene")
+MAX_HOOKS = 20
+MAX_HOOK_TIMEOUT = 120          # secondes, par hook
+DEFAULT_HOOK_TIMEOUT = 30
+HOOKS_PHASE_BUDGET = 300.0      # secondes, pour tous les hooks d'un même moment
+
 # Alertes « Réparations » de la réconciliation (9.2)
 RECONCILE_ISSUES = ("missing_automations", "missing_suspended", "reapply_failed")
 
