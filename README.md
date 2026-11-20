@@ -112,6 +112,10 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
   page** (l'interface Home Assistant est repoussée vers le bas) ou une petite carte. Si le texte dépasse la fenêtre, il
   **défile** (désactivable : il passe alors à la ligne, avec un ascenseur s'il est très long). Le même bandeau sert
   aussi au préavis d'une maintenance à venir.
+- **Journal de Home Assistant** : « Maintenance démarrée » et « Maintenance terminée » apparaissent dans la page
+  *Journal*, rattachées à l'interrupteur, avec l'**auteur** (nom de l'utilisateur, ou *service*, *interrupteur*,
+  *planification*), le **motif** et, à la fin, la cause (arrêtée à la main, automatiquement, remplacée, durée maximale).
+  Les textes suivent la langue de Home Assistant (fr / en). Ce sont les évènements `maintenance_mode_started` / `_ended` qui sont décrits.
 - **Réparations** (avec bouton **Réparer**) : trois écarts sont surveillés, à chaque enregistrement, au démarrage et
   après un rechargement des automatisations.
   - *Automatisation sélectionnée introuvable* : « Réparer » la retire de la sélection.

@@ -17,6 +17,7 @@ Vue d'ensemble de l'intégration **Mode maintenance** (0.7). Chaque module Pytho
 | `batching.py` | suspension / réactivation par lots : délai d'attente par lot, reprise partielle, progression |
 | `hooks.py` | hooks avant / après (scripts, scènes) : ordre, délai, politique d'échec, protection contre les boucles |
 | `report.py` | bilan de fin : durée réelle, entités devenues indisponibles, erreurs du journal (collecteur borné) |
+| `logbook.py` | description des évènements démarrée / terminée pour le Journal de Home Assistant |
 | `transaction.py` | bascule transactionnelle : marqueur `pending` écrit avant d'agir, reprise d'une bascule interrompue au démarrage |
 | `reconcile.py` | réconciliation : écarts détectés (automatisation introuvable, suspendue disparue, remise en pause en échec), alertes réparables |
 | `repairs.py` | flux « Réparer » des alertes (Paramètres → Réparations) |
