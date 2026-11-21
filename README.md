@@ -249,6 +249,8 @@ Pense à remplacer `VOTRE_PSEUDO` dans `manifest.json` par ton nom d'utilisateur
 | Les dates sont décalées | Le formulaire suit le fuseau de ton profil (*Profil → Fuseau horaire*) : navigateur ou serveur. Le fuseau utilisé est affiché sous les champs. |
 | Pas de notification push | Vérifie que le service existe dans *Outils de développement → Actions* (`notify.mobile_app_…`). L'alias générique `notify.notify` n'est pas proposé. Les moments activés sont réglables dans l'onglet Paramètres. |
 | Une maintenance répétée « saute » un mois | Elle retombe sur le dernier jour d'un mois plus court (31 → 28 février) puis retrouve le jour d'origine. |
+| Une maintenance répétée tombe pendant le passage à l'heure d'été | Si l'heure de début n'existe pas ce jour-là (par exemple 02:30 le dernier dimanche de mars en Europe), l'occurrence démarre à l'instant correspondant le plus proche et garde sa **durée réelle** ; elle n'est jamais ignorée. Au retour à l'heure d'hiver, l'heure ambiguë prend sa première occurrence. |
+| L'horloge du serveur a reculé pendant une maintenance | Rien n'est terminé ni redémarré en double : la maintenance en cours continue, les notifications déjà envoyées ne sont pas renvoyées, la fin se fait à l'échéance. Le bilan indique une durée d'au moins 0. |
 | Après suppression de l'intégration, des automatisations sont encore coupées | La suppression réactive celles que la maintenance avait suspendues ; celles que tu avais coupées toi-même restent coupées. |
 
 **Journaux détaillés** : dans `configuration.yaml`

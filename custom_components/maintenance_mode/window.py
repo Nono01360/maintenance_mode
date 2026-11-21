@@ -72,7 +72,13 @@ def shift(start: datetime, end: datetime | None, repeat: str, anchor_day: int | 
         # la durée « murale » est conservée : même heure de fin locale, quel que soit le DST
         wall = dt_util.as_local(end).replace(tzinfo=None) - local_start.replace(tzinfo=None)
         new_end = (new_start.replace(tzinfo=None) + wall).replace(tzinfo=new_start.tzinfo)
-    return dt_util.as_utc(new_start), (dt_util.as_utc(new_end) if new_end else None)
+    new_start_utc = dt_util.as_utc(new_start)
+    new_end_utc = dt_util.as_utc(new_end) if new_end else None
+    if new_end_utc is not None and new_end_utc <= new_start_utc:
+        # début dans l'heure inexistante du passage à l'heure d'été : la durée « murale » s'effondrerait à zéro
+        # (la maintenance serait ignorée comme « déjà passée ») ; on garde alors la durée réelle d'origine
+        new_end_utc = new_start_utc + (dt_util.as_utc(end) - dt_util.as_utc(start))
+    return new_start_utc, new_end_utc
 
 
 @dataclass
