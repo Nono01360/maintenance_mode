@@ -13,7 +13,6 @@
   "issues": {
     "missing_automations": {
       "title": "Maintenance mode: automations not found",
-      "description": "These selected automations no longer exist: {entities}. Use \"Repair\" to remove them from the selection, or update the list in the \"Maintenance\" panel (Settings tab).",
       "fix_flow": {
         "step": {
           "confirm": {
@@ -32,7 +31,6 @@
     },
     "missing_suspended": {
       "title": "Maintenance mode: a suspended automation has disappeared",
-      "description": "These automations suspended by the current maintenance no longer exist: {entities}. Use \"Repair\" to forget them (they will not be re-enabled at the end).",
       "fix_flow": {
         "step": {
           "confirm": {
@@ -47,7 +45,6 @@
     },
     "reapply_failed": {
       "title": "Maintenance mode: could not pause again",
-      "description": "These automations should be suspended but are active: {entities}. Use \"Repair\" to try suspending them again.",
       "fix_flow": {
         "step": {
           "confirm": {

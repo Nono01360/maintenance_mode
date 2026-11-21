@@ -13,7 +13,6 @@
   "issues": {
     "missing_automations": {
       "title": "Automatisations introuvables dans le mode maintenance",
-      "description": "Ces automatisations sélectionnées n'existent plus : {entities}. Utilise « Réparer » pour les retirer de la sélection, ou mets à jour la liste dans le panneau « Maintenance » (onglet Paramètres).",
       "fix_flow": {
         "step": {
           "confirm": {
@@ -32,7 +31,6 @@
     },
     "missing_suspended": {
       "title": "Mode maintenance : automatisation suspendue disparue",
-      "description": "Ces automatisations suspendues par la maintenance en cours n'existent plus : {entities}. Utilise « Réparer » pour les oublier (elles ne seront pas réactivées à la fin).",
       "fix_flow": {
         "step": {
           "confirm": {
@@ -47,7 +45,6 @@
     },
     "reapply_failed": {
       "title": "Mode maintenance : remise en pause impossible",
-      "description": "Ces automatisations devraient être suspendues mais sont actives : {entities}. Utilise « Réparer » pour réessayer de les suspendre.",
       "fix_flow": {
         "step": {
           "confirm": {

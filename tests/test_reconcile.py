@@ -119,3 +119,20 @@ async def test_repairs_http_flow(hass, hass_client):
     data = await resp.json()
     assert data["type"] == "create_entry", data
     assert m.config["automations"] == []
+
+
+def test_fixable_issue_translations_follow_the_hassfest_rule():
+    """Régression (0.9.10) : pour une alerte réparable, hassfest interdit « description » ET « fix_flow » ensemble
+    (« two or more values in the same group of exclusion 'fixable' ») : la CI « Validate » échouait."""
+    import json
+    from pathlib import Path
+
+    from custom_components.maintenance_mode.const import RECONCILE_ISSUES
+
+    for lang in ("fr", "en"):
+        issues = json.loads((Path(__file__).parent.parent / "custom_components" / "maintenance_mode" / "translations"
+                             / f"{lang}.json").read_text(encoding="utf-8"))["issues"]
+        for key in RECONCILE_ISSUES:
+            assert "fix_flow" in issues[key] and "description" not in issues[key], (lang, key)
+            step = issues[key]["fix_flow"]["step"]["confirm"]
+            assert step["title"] and "{entities}" in step["description"], (lang, key)
