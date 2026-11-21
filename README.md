@@ -165,6 +165,14 @@ vue administrateur, les autres la vue utilisateur ; le propriétaire a toujours 
 - L'état et le planning sont conservés après un redémarrage ; ce qui est arrivé à échéance pendant
   l'arrêt est rattrapé au démarrage.
 
+## Recettes
+
+Quatre usages prêts à copier, dans [`docs/RECETTES.md`](docs/RECETTES.md) : sauvegarde avant la maintenance (hook),
+planification quand une mise à jour est disponible, annonces vocales, maintenance démarrée depuis un agenda. Un test
+automatique relit chaque bloc YAML (syntaxe, services et champs de l'intégration, évènements) ; les recettes n'ont
+**pas** été exécutées sur un vrai Home Assistant : adapte les identifiants d'exemple et essaie-les d'abord hors
+maintenance réelle.
+
 ## Entités
 
 - `switch.mode_maintenance` : démarre / arrête une maintenance immédiate.

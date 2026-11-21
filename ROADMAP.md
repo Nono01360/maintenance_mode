@@ -1,5 +1,8 @@
 # Mode maintenance — feuille de route vers la 1.0
 
+> Mise à jour à la 0.9.9 : voir « État d'avancement » (section 3). Les sections 0 (point de départ, 0.6.1) et 4 (détail) sont
+> conservées telles qu'écrites à l'origine.
+
 > Objectif : une **1.0 très qualitative**. La qualité n'est pas une phase finale : chaque version
 > doit respecter les mêmes engagements (section 1) et les mêmes règles de conduite (section 2).
 > Les tailles sont relatives (**S** petite, **M** moyenne, **L** grosse). Aucune date n'est promise :
@@ -81,6 +84,42 @@ après redémarrage, initiateur non public, alertes de réparation, diagnostics,
 | **0.12** | Qualité transversale (gel des fonctions) | accessibilité, performance, langues, sécurité, documentation, distribution |
 | **1.0-rc** | Stabilisation | corrections uniquement, période d'essai |
 | **1.0** | Version de référence | tous les critères de la section 1 |
+
+### État d'avancement (à la 0.9.9)
+
+Statuts : **fait** = livré, testé automatiquement, documenté ; **écrit, jamais exécuté** = code et workflow présents mais
+jamais lancés ; **non fait**. Aucun essai réel sur le vrai Home Assistant n'a été fait par l'assistant : seuls les essais
+rapportés par l'utilisateur comptent (0.8 : « tout est bon »).
+
+| Version | Point | Statut |
+|---|---|---|
+| 0.6.2 | 6.2.1 à 6.2.8 | **fait** (patchs 0.6.2 à 0.6.9) |
+| 0.7 | 7.1 découpage de `manager.py` (+ tests de caractérisation) | **fait** (aucun module > 300 lignes, vérifié par `test_architecture.py`) |
+| 0.7 | 7.2 stockage versionné, migrations, mode sûr | **fait** (0.7.9) |
+| 0.7 | 7.3 types, vérification de types en CI | **non fait** (aucun outil de typage dans la CI) |
+| 0.7 | 7.4 confidentialité complète | **fait** (0.7.10) |
+| 0.7 | 7.5 mode compatibilité, module d'isolation, diagnostic | **fait** (0.7.11, 0.7.12) |
+| 0.7 | 7.6 banc de bout en bout (HA en conteneur + Playwright) | **écrit, jamais exécuté** (`e2e/`, 0.7.16 « à mettre au point ») |
+| 0.7 | 7.7 veille « canari » sur HA bêta | **écrit, jamais exécuté** (`e2e.yml` hebdomadaire, matrice avec `beta`) |
+| 0.7 | 7.8 CI en matrice, lint, sécurité, couverture | **fait** (0.7.15 : seuil de couverture 85 %, ruff, bandit) |
+| 0.7 | 7.9 erreurs à code stable traduites | **fait** (0.7.13) |
+| 0.7 | 7.10 limites de saisie, limitation douce | **fait** (0.7.14) |
+| 0.7 | 7.11 `ARCHITECTURE.md`, `quality_scale.yaml` | **fait** |
+| 0.8 | 8.1 exclusions · 8.2 étiquettes et zones · 8.3 aperçu et test à blanc · 8.4 durée maximale · 8.5 plages interdites · 8.6 confirmation renforcée · 8.7 annulation de suppression | **fait** (0.8.1 à 0.8.7 ; essais réels de l'utilisateur : « tout est bon ») |
+| 0.8 | ajout non prévu : un bouton Enregistrer par carte de Paramètres | **fait** (0.8.8) |
+| 0.9 | 9.1 bascule transactionnelle | **fait** (0.9.1 ; tests de chaos sur démarrage, fin et remplacement) |
+| 0.9 | 9.2 réconciliation et réparation réparable | **fait** (0.9.2 ; trois écarts : sélection introuvable, suspendue disparue, remise en pause en échec) |
+| 0.9 | 9.3 suspension par lots | **fait** (0.9.3 ; lots de 20, délai 30 s, reprise partielle, progression) |
+| 0.9 | 9.4 hooks avant / après | **fait** (0.9.4 ; délai max 120 s par hook, politique d'échec « annuler » seulement avant le début, réservé aux administrateurs HA) |
+| 0.9 | 9.5 bilan de fin | **fait** (0.9.5) |
+| 0.9 | 9.6 Journal de Home Assistant | **fait** (0.9.6 ; descripteurs testés, pas le composant Journal réel) |
+| 0.9 | 9.7 capteurs de santé, `binary_sensor` « problème » | **fait** (0.9.7 ; corrige aussi la suppression du calendrier à chaque chargement) |
+| 0.9 | 9.8 tests de temps | **fait** (0.9.8 ; a révélé et corrigé une durée nulle dans l'heure inexistante du passage à l'heure d'été) |
+| 0.9 | 9.9 recettes documentées | **fait avec réserve** (0.9.9 : `docs/RECETTES.md`, lues par un test ; **non essayées à la main** sur un vrai HA, contrairement au critère « testées à la main ») |
+
+**Sortie de la 0.9 (critère de la section 4)** : « un vrai redémarrage de Home Assistant pendant une maintenance, essayé
+sur ton installation, avec et sans arrêt propre » n'a **pas** encore été fait : à réaliser avant de considérer la 0.9
+comme terminée.
 
 **Dépendances principales** : 0.7 avant tout le reste (découpage + migration + banc de test) ; 0.8 « aperçu » avant
 « étiquettes » ; 0.9 « bascule transactionnelle » avant « hooks » ; 0.10 « carte » et « actions de notification »
