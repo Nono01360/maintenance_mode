@@ -50,16 +50,19 @@ class Calls:
         return [ids for s, ids in self.log if s == service]
 
 
-async def test_200_automations_in_batches_without_blocking_the_loop(hass, hass_admin_user, hass_read_only_user):
+async def test_200_automations_in_batches_without_blocking_the_loop(hass, hass_admin_user, hass_read_only_user, monkeypatch):
     _, m = await _setup(hass, NAMES)
     snapshots, ticks = [], 0
+    real_send = batching.async_dispatcher_send
 
-    def on_update():
-        nonlocal snapshots
-        snapshots.append((m.progress and dict(m.progress), "progress" in m.state_for(hass_admin_user),
-                          "progress" in m.state_for(hass_read_only_user)))
+    def spy(hass_, signal, *args):
+        """Capture l'état AU MOMENT de l'envoi (les écouteurs, eux, tournent plus tard et verraient une progression avancée)."""
+        if signal == SIGNAL_STATE_UPDATED:
+            snapshots.append((m.progress and dict(m.progress), "progress" in m.state_for(hass_admin_user),
+                              "progress" in m.state_for(hass_read_only_user)))
+        return real_send(hass_, signal, *args)
 
-    async_dispatcher_connect(hass, SIGNAL_STATE_UPDATED, on_update)
+    monkeypatch.setattr(batching, "async_dispatcher_send", spy)
 
     async def heartbeat():
         nonlocal ticks
