@@ -687,9 +687,13 @@ class MaintenanceModePanel extends HTMLElement {
     this._pending = false;
     const root = this.shadowRoot;
     const activeEl = root.activeElement;
-    const activeId = activeEl && activeEl.dataset?.action && !["scope", "apply-template"].includes(activeEl.dataset.action)
-      ? activeEl.dataset.action : null;
-    const activeField = activeEl ? activeEl.dataset?.field : null;
+    // L'élément qui avait le focus est retrouvé par son RANG parmi ceux de même nature (plusieurs boutons « Enregistrer »,
+    // plusieurs hooks…) : chercher le premier de même `data-action` rendait le focus au premier de la page, et `focus()`
+    // fait défiler jusqu'à lui (la page remontait en haut).
+    const kind = activeEl && activeEl.dataset?.action && !["scope", "apply-template"].includes(activeEl.dataset.action)
+      ? `[data-action="${activeEl.dataset.action}"]`
+      : (activeEl && activeEl.dataset?.field ? `[data-field="${activeEl.dataset.field}"]` : null);
+    const kindRank = kind ? [...root.querySelectorAll(kind)].indexOf(activeEl) : -1;
     const hostScroll = this.scrollTop;
     const parentScroll = this.parentElement ? this.parentElement.scrollTop : 0;
     const windowScroll = window.scrollY;
@@ -710,12 +714,9 @@ class MaintenanceModePanel extends HTMLElement {
       window.scrollTo(window.scrollX, windowScroll);
       const els = [...root.querySelectorAll(".scroll, .list")];
       keep.forEach((v, i) => { if (els[i]) els[i].scrollTop = v; });
-      if (activeId) {
-        const el = root.querySelector(`[data-action="${activeId}"]`);
-        if (el) el.focus();
-      } else if (activeField) {
-        const el = root.querySelector(`[data-field="${activeField}"]`);
-        if (el) el.focus();
+      if (kind && kindRank >= 0) {
+        const el = root.querySelectorAll(kind)[kindRank];
+        if (el && !el.disabled) el.focus({ preventScroll: true });      // jamais de défilement dû au focus
       }
     };
     apply();
