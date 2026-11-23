@@ -310,6 +310,9 @@ const EXTRA_PAGES = {
   ],
 };
 
+// Durée (ms) pendant laquelle un rendu est considéré comme « en train de se poser » (voir _render)
+const SETTLE_MS = 300;
+
 const NOTIFY_KINDS = ["pre", "started", "end_soon", "ended"];
 // Cartes de l'onglet Paramètres : chacune s'enregistre séparément (et ne touche qu'à ses propres réglages)
 const SETTINGS_BLOCKS = {
@@ -694,13 +697,26 @@ class MaintenanceModePanel extends HTMLElement {
       ? `[data-action="${activeEl.dataset.action}"]`
       : (activeEl && activeEl.dataset?.field ? `[data-field="${activeEl.dataset.field}"]` : null);
     const kindRank = kind ? [...root.querySelectorAll(kind)].indexOf(activeEl) : -1;
-    const hostScroll = this.scrollTop;
-    const parentScroll = this.parentElement ? this.parentElement.scrollTop : 0;
-    const windowScroll = window.scrollY;
-    const keep = this._resetScroll
-      ? []
-      : [...root.querySelectorAll(".scroll, .list")].map((e) => e.scrollTop);
+    // Positions de défilement. Le contenu des ha-card se dessine en différé : juste après un rendu, la page est trop courte
+    // et toute position est tronquée (souvent à 0). À l'enregistrement, le serveur pousse l'état PUIS renvoie le résultat :
+    // deux ou trois rendus s'enchaînent, et le second lirait la position tronquée du premier. Pendant que le rendu
+    // précédent « se pose » (SETTLE_MS), on réutilise donc la position qu'on VOULAIT, pas celle qu'on lit.
+    const read = {
+      host: this.scrollTop,
+      parent: this.parentElement ? this.parentElement.scrollTop : 0,
+      win: window.scrollY,
+      keep: this._resetScroll ? [] : [...root.querySelectorAll(".scroll, .list")].map((e) => e.scrollTop),
+    };
+    const memo = !this._resetScroll && this._scrollMemo && Date.now() < this._settleUntil ? this._scrollMemo : null;
+    // une lecture tronquée ne peut que DIMINUER la position, un vrai défilement vers le bas l'augmente : on garde le maximum
+    const snap = memo ? {
+      host: Math.max(memo.host, read.host), parent: Math.max(memo.parent, read.parent), win: Math.max(memo.win, read.win),
+      keep: read.keep.map((v, i) => Math.max(memo.keep[i] || 0, v)).concat(memo.keep.slice(read.keep.length)),
+    } : read;
+    this._scrollMemo = snap;
+    this._settleUntil = Date.now() + SETTLE_MS;
     this._resetScroll = false;
+    const token = this._renderToken = (this._renderToken || 0) + 1;
 
     root.innerHTML = `<style>${STYLES}</style>
       <div class="shell">
@@ -708,19 +724,27 @@ class MaintenanceModePanel extends HTMLElement {
         <div class="scroll"><div class="wrap">${this._undoHtml()}${this._bodyHtml()}</div></div>
       </div>`;
 
-    const apply = () => {
-      if (this.parentElement) this.parentElement.scrollTop = parentScroll;
-      this.scrollTop = hostScroll;
-      window.scrollTo(window.scrollX, windowScroll);
+    // `onlyRaise` (passes tardives) : on ne fait que REMONTER une position tronquée, jamais la baisser, pour ne pas
+    // arracher l'utilisateur à un défilement qu'il vient de faire.
+    const applyScroll = (onlyRaise = false) => {
+      if (token !== this._renderToken) return;              // un rendu plus récent a pris le relais
+      const put = (el, v) => { if (el && (!onlyRaise || el.scrollTop < v)) el.scrollTop = v; };
+      put(this.parentElement, snap.parent);
+      put(this, snap.host);
+      if (!onlyRaise || window.scrollY < snap.win) window.scrollTo(window.scrollX, snap.win);
       const els = [...root.querySelectorAll(".scroll, .list")];
-      keep.forEach((v, i) => { if (els[i]) els[i].scrollTop = v; });
+      snap.keep.forEach((v, i) => put(els[i], v));
+    };
+    const applyFocus = () => {
       if (kind && kindRank >= 0) {
         const el = root.querySelectorAll(kind)[kindRank];
         if (el && !el.disabled) el.focus({ preventScroll: true });      // jamais de défilement dû au focus
       }
     };
-    apply();
-    requestAnimationFrame(apply);
+    applyScroll(); applyFocus();
+    requestAnimationFrame(() => { applyScroll(); applyFocus(); });
+    // passes de rattrapage tant que le contenu peut encore grandir (pas de focus ici : ne pas le voler)
+    for (const ms of [60, 150, SETTLE_MS - 20]) setTimeout(() => applyScroll(true), ms);
   }
 
   _barHtml() {

@@ -49,6 +49,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // le serveur pousse l'état (autre onglet, évènement) juste après : même chose
   push(JSON.parse(JSON.stringify(state))); await sleep(30);
   ok(sc().scrollTop === 640, "mise à jour poussée par le serveur : défilement conservé", sc().scrollTop);
+  // ---- contenu des ha-card dessiné en différé : tant que ce n'est pas fait, une position de défilement est tronquée à 0.
+  // À l'enregistrement le serveur pousse l'état PUIS renvoie le résultat : deux rendus dans la même image.
+  Object.defineProperty(w.Element.prototype, "scrollTop", { configurable: true, get() { return this.__st || 0; }, set(v) { this.__st = w.__ready === false ? 0 : v; } });
+  let readyTimer; const origRender = el._render.bind(el);
+  el._render = (force) => { w.__ready = false; origRender(force); clearTimeout(readyTimer); readyTimer = setTimeout(() => { w.__ready = true; }, 30); };
+  w.__ready = true; sc().scrollTop = 640; parent.scrollTop = 0; el.scrollTop = 0;
+  el._onData(JSON.parse(JSON.stringify(state)));          // évènement poussé par le serveur
+  el._onData(JSON.parse(JSON.stringify(state)));          // puis le résultat de l'appel
+  el._render(true);                                       // puis le rendu forcé de l'enregistrement
+  await sleep(400);
+  ok(sc().scrollTop === 640, "trois rendus dans la même image avec contenu dessiné en différé : la page ne revient pas en haut", sc().scrollTop);
+  el._render = origRender; w.__ready = true;
+
   // ---- le focus rendu après un rendu doit revenir au MÊME élément (focus() fait défiler jusqu'à lui)
   const focusCalls = []; const realFocus = w.HTMLElement.prototype.focus;
   w.HTMLElement.prototype.focus = function (opts) { focusCalls.push({ el: this, opts }); return realFocus.call(this, opts); };
